@@ -36,6 +36,7 @@ jobs:
           printf '%s\n' "$CLE" | tr -d '\r' > "$brut"
           # Diagnostic sans rien révéler : forme du texte collé.
           echo "Lignes : $(wc -l < "$brut") ; BEGIN : $(grep -c -- '-----BEGIN' "$brut" || true) ; END : $(grep -c -- '-----END' "$brut" || true) ; PuTTY : $(grep -c 'PuTTY-User-Key-File' "$brut" || true) ; ENCRYPTED : $(grep -c 'ENCRYPTED' "$brut" || true) ; clé publique ssh-rsa : $(grep -c '^ssh-' "$brut" || true) ; ligne la plus longue : $(awk '{ if (length > m) m = length } END { print m+0 }' "$brut")"
+          echo "Lignes avec ---- : $(grep -c -- '----' "$brut" || true) ; SSH2 : $(grep -c 'SSH2' "$brut" || true) ; PUBLIC : $(grep -c 'PUBLIC' "$brut" || true) ; PRIVATE : $(grep -c 'PRIVATE' "$brut" || true) ; lignes avec deux-points : $(grep -c ':' "$brut" || true) ; lignes vides : $(grep -c '^$' "$brut" || true)"
           if ! grep -q -- '-----BEGIN' "$brut" && ! grep -q 'PuTTY-User-Key-File' "$brut"; then
             echo "::error::Le secret EX2_SSH_KEY ne contient pas de clé privée complète (pas de ligne -----BEGIN). Recopier toute la clé depuis cPanel."
             exit 1
