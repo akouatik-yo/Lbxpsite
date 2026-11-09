@@ -23,6 +23,7 @@ jobs:
       HOTE: ${{ secrets.EX2_HOST }}
       UTILISATEUR: ${{ secrets.EX2_USER }}
       PORT: ${{ secrets.EX2_PORT }}
+      PHRASE: ${{ secrets.EX2_SSH_PASSPHRASE }}
     steps:
       - uses: actions/checkout@v4
 
@@ -31,6 +32,10 @@ jobs:
           install -m 700 -d ~/.ssh
           printf '%s\n' "${{ secrets.EX2_SSH_KEY }}" > ~/.ssh/id_deploiement
           chmod 600 ~/.ssh/id_deploiement
+          # cPanel impose une phrase de passe : on la retire sur le runner (copie jetable).
+          if [ -n "$PHRASE" ]; then
+            ssh-keygen -p -q -P "$PHRASE" -N "" -f ~/.ssh/id_deploiement
+          fi
           ssh-keyscan -p "$PORT" "$HOTE" > ~/.ssh/known_hosts 2>/dev/null
           echo "Empreintes du serveur (à comparer à celles de cPanel) :"
           ssh-keygen -lf ~/.ssh/known_hosts
