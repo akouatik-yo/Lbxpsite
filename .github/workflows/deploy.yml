@@ -36,7 +36,6 @@ jobs:
           printf '%s\n' "$CLE" | tr -d '\r' > "$brut"
           # Diagnostic sans rien révéler : forme du texte collé.
           echo "Lignes : $(wc -l < "$brut") ; BEGIN : $(grep -c -- '-----BEGIN' "$brut" || true) ; END : $(grep -c -- '-----END' "$brut" || true) ; PuTTY : $(grep -c 'PuTTY-User-Key-File' "$brut" || true) ; ENCRYPTED : $(grep -c 'ENCRYPTED' "$brut" || true) ; clé publique ssh-rsa : $(grep -c '^ssh-' "$brut" || true) ; ligne la plus longue : $(awk '{ if (length > m) m = length } END { print m+0 }' "$brut")"
-          echo "Lignes avec ---- : $(grep -c -- '----' "$brut" || true) ; SSH2 : $(grep -c 'SSH2' "$brut" || true) ; PUBLIC : $(grep -c 'PUBLIC' "$brut" || true) ; PRIVATE : $(grep -c 'PRIVATE' "$brut" || true) ; lignes avec deux-points : $(grep -c ':' "$brut" || true) ; lignes vides : $(grep -c '^$' "$brut" || true)"
           if ! grep -q -- '-----BEGIN' "$brut" && ! grep -q 'PuTTY-User-Key-File' "$brut"; then
             echo "::error::Le secret EX2_SSH_KEY ne contient pas de clé privée complète (pas de ligne -----BEGIN). Recopier toute la clé depuis cPanel."
             exit 1
@@ -59,9 +58,15 @@ jobs:
           rm -f "$brut"
           chmod 600 ~/.ssh/id_deploiement
           ssh-keygen -y -f ~/.ssh/id_deploiement > /dev/null && echo "Clé lisible."
-          ssh-keyscan -p "$PORT" "$HOTE" > ~/.ssh/known_hosts 2>/dev/null
-          echo "Empreintes du serveur (à comparer à celles de cPanel) :"
-          ssh-keygen -lf ~/.ssh/known_hosts
+          # Identité du serveur EX2 figée (relevée au premier déploiement, 09/11/2026) :
+          # on refuse de se connecter si la clé ED25519 du serveur change.
+          ssh-keyscan -t ed25519 -p "$PORT" "$HOTE" > ~/.ssh/known_hosts 2>/dev/null
+          attendue='SHA256:WD/eKiwrdZAJ5VQF+NmkqZO3TQKMZnNo1g6qmjdRgO4'
+          if ! ssh-keygen -lf ~/.ssh/known_hosts | grep -qF "$attendue"; then
+            echo "::error::La clé du serveur ne correspond pas à celle d'EX2 relevée le 09/11/2026. Déploiement arrêté."
+            exit 1
+          fi
+          echo "Serveur EX2 reconnu."
           printf 'Host ex2\n  HostName %s\n  User %s\n  Port %s\n  IdentityFile ~/.ssh/id_deploiement\n  IdentitiesOnly yes\n' \
             "$HOTE" "$UTILISATEUR" "$PORT" > ~/.ssh/config
 
