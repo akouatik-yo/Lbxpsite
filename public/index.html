@@ -55,11 +55,10 @@
   /* gamme de verts (note de direction artistique) : sombres nombreux, lumineux rares */
   const hex = (h) => [1, 3, 5].map((i) => parseInt(h.substr(i, 2), 16) / 255);
   const VERTS = [
-    ['#0B2418', 0.22], ['#17402A', 0.26], ['#2C6234', 0.22], // forêt profonde, sous-bois, mousse
-    ['#4F8A3A', 0.15], ['#86B843', 0.10],                    // fougère, lichen
-    ['#BEE33A', 0.03], ['#84D7C5', 0.02],                    // pousse, menthe
+    ['#0B2418', 0.17], ['#17402A', 0.17], ['#2C6234', 0.32], // forêt profonde, sous-bois, mousse
+    ['#4F8A3A', 0.25], ['#86B843', 0.07], ['#BEE33A', 0.02], // fougère, lichen, pousse
   ].map(([h, p]) => [hex(h), p]);
-  const ACIDE = hex('#D6F51A'), IVOIRE = hex('#FFF5DF');
+  const ACIDE = hex('#D6F51A'), IVOIRE = hex('#FFF5DF'), MENTHE = hex('#84D7C5');
 
   /* ───────── WebGL : programmes ───────── */
   function shader(type, src) {
@@ -106,7 +105,7 @@
         'float h(vec2 p){return fract(sin(dot(p,vec2(12.9898,78.233)))*43758.5453);}' +
         'void main(){vec4 a=texture(u_t,v);float m=texture(u_m,vec2(v.x,1.-v.y)).r;' +
         'vec2 e=min(v,1.-v)/u_px;float fb=smoothstep(0.,26.,min(e.x,e.y));' +
-        'vec3 g=(1.-exp(-a.rgb*1.25))*(1.-.88*m)*fb;float w=1.-exp(-a.a*u_eclat);' +
+        'vec3 g=(1.-exp(-a.rgb*1.05))*(1.-.92*m)*fb;float w=1.-exp(-a.a*u_eclat);' +
         'vec3 c=g+w*vec3(1.,.96,.875);' +
         'vec4 b=texture(u_b1,v)*.5+texture(u_b2,v)*.5;' +
         'c+=b.rgb*.32+b.a*vec3(1.,.96,.875)*.38;' +
@@ -178,7 +177,7 @@
     let fs = 100; g.font = `800 ${fs}px ${POLICE}`;
     const esp = 0.05;
     const largeur = (f) => { g.font = `800 ${f}px ${POLICE}`; return g.measureText(MOT).width + f * esp * (MOT.length - 1); };
-    fs = Math.min((W * (portrait ? 0.94 : 0.8)) / (largeur(100) / 100), H * 0.3);
+    fs = Math.min((W * (portrait ? 0.84 : 0.8)) / (largeur(100) / 100), H * 0.3);
     g.font = `800 ${fs}px ${POLICE}`;
     const m = g.measureText(MOT), asc = m.actualBoundingBoxAscent || fs * 0.95, desc = m.actualBoundingBoxDescent || 0;
     const L = largeur(fs), y0 = H * 0.5 + (asc - desc) / 2;
@@ -249,13 +248,17 @@
         const px = x2 * LC + 1, py = y * LC + 1;
         if (dedans[y * LW + x2] && px >= xO && px <= xO + wO && py < hautO - fs * 0.02) { ACC[y * LW + x2] = 1; pts.push(px, py); }
       }
-      if (pts.length >= 12) {
+      if (pts.length >= 4) {
         let x0 = 1e9, x1 = -1e9;
         for (let i = 0; i < pts.length; i += 2) { x0 = Math.min(x0, pts[i]); x1 = Math.max(x1, pts[i]); }
         const moy = (f) => { let sx = 0, sy = 0, k = 0; for (let i = 0; i < pts.length; i += 2) if (f(pts[i])) { sx += pts[i]; sy += pts[i + 1]; k++; } return k ? [sx / k, sy / k] : null; };
         const lw = x1 - x0, cx = (x0 + x1) / 2;
         const gch = moy((px) => px < x0 + lw * 0.14), dr = moy((px) => px > x1 - lw * 0.14), so = moy((px) => Math.abs(px - cx) < lw * 0.07);
-        if (gch && dr && so) accent = { g: gch, d: dr, s: so };
+        if (gch && dr && so) {
+          const mx = (gch[0] + dr[0]) / 2, my = (gch[1] + dr[1]) / 2, k = 1.3;
+          const ag = (p) => [mx + (p[0] - mx) * k, my + (p[1] - my) * k - fs * 0.02];
+          accent = { g: ag(gch), d: ag(dr), s: ag(so) };
+        }
       }
     }
     const estAccent = (x, y) => { const gx = (x / LC) | 0, gy = (y / LC) | 0; return gx >= 0 && gy >= 0 && gx < LW && gy < LH && ACC[gy * LW + gx] === 1; };
@@ -294,7 +297,7 @@
     let nb = 0, nv = 0;
     const aireTot = W * H;
     const VMAX = Math.round(clamp(aireTot / 1500, 260, 1000));
-    const BMAX = Math.round(clamp(Lt.aire / 210, 120, 900));
+    const BMAX = Math.round(clamp(Lt.aire / 210, 220, 900));
     const segs = []; // x0,y0,x1,y1,r,g,b,a,largeur
     const pointe = (k, x, y, a, gen, nd, e, col) => {
       if (k === 0) { if (nb >= BMAX) return; nb++; } else { if (nv >= VMAX) return; nv++; }
@@ -312,17 +315,17 @@
     // le mot germe d'abord : des spores blanches dans les lettres, échelonnées sur 1,5 s
     // semis réparti (aucune lettre oubliée) : points intérieurs espacés d'au moins R
     {
-      const R = Math.max(10, Lt.fs * 0.16), R2 = R * R, pris = [];
+      const R = Math.max(7, Lt.fs * 0.16), R2 = R * R, pris = [];
       for (let essais = 0; essais < 30000; essais++) {
         const x = rnd(Lt.box[2], Lt.box[0]), y = rnd(Lt.box[3], Lt.box[1]);
         if (Lt.sd(x, y) > -Math.min(Lt.epais * 0.4, 6 * kL) || Lt.estAccent(x, y)) continue;
         let ok = true;
         for (let j = 0; j < pris.length; j += 2) { const dx = pris[j] - x, dy = pris[j + 1] - y; if (dx * dx + dy * dy < R2) { ok = false; break; } }
-        if (ok) { pris.push(x, y); semis.push({ t: rnd(1.6), k: 0, x, y }); }
+        if (ok) { pris.push(x, y); semis.push({ t: 0.6 + rnd(2.2), k: 0, x, y }); }
       }
     }
     // l'accent pousse en dernier : deux hyphes partent des pieds du chevron et se rejoignent au sommet
-    if (Lt.accent) for (let i = 0; i < 6; i++) semis.push({ t: 3.4 + i * 0.55 + rnd(0.2), k: 2 });
+    if (Lt.accent) for (let i = 0; i < 10; i++) semis.push({ t: 4.2 + i * 0.4 + rnd(0.2), k: 2 });
     const jonctions = [];
     // puis les verts, lentement, depuis les bords et les vides
     const lieuVide = (marge) => {
@@ -341,6 +344,7 @@
     function germer(s) {
       if (s.k === 2) {
         const A = Lt.accent, j = () => rnd(2.5, -2.5) * kL;
+        if (!A) return;
         for (const pied of [A.g, A.d]) {
           const x = pied[0] + j(), y = pied[1] + j(), r = noeud(x, y, -1, 0, 0);
           if (nb >= BMAX) nb--; // l'accent passe avant le plafond
@@ -398,7 +402,7 @@
       wd += p.nz * (p.cible ? 0.15 : 0.8);
       p.w += (clamp(wd, -9, 9) - p.w) * Math.min(1, dt * 8);
       p.a += p.w * dt;
-      const ds = 34 * kM * dt * vitesseBlanc(t);
+      const ds = 30 * kM * dt * vitesseBlanc(t);
       p.x += Math.cos(p.a) * ds; p.y += Math.sin(p.a) * ds;
       const i1 = ci(p.x, p.y); if (i1 < 0) return false;
       WD[i1] = Math.min(4, WD[i1] + ds * 0.05 / kM);
@@ -428,12 +432,12 @@
     function pousserVert(p, dt, t) {
       const i0 = ci(p.x, p.y); if (i0 < 0) return false;
       const sd0 = Lt.sd(p.x, p.y);
-      const marge = 16 * kL;
+      const marge = 26 * kM;
       if (sd0 < marge && Math.random() < dt * 6) return false;
       const look = 13, aL = p.a - 0.55, aR = p.a + 0.55;
       const xl = p.x + Math.cos(aL) * look, yl = p.y + Math.sin(aL) * look, xr = p.x + Math.cos(aR) * look, yr = p.y + Math.sin(aR) * look;
       const il = ci(xl, yl), ir = ci(xr, yr), ic = ci(p.x + Math.cos(p.a) * look, p.y + Math.sin(p.a) * look);
-      let wd = ((ir < 0 ? -1 : NU[ir]) - (il < 0 ? -1 : NU[il])) * 1.6;
+      let wd = ((ir < 0 ? -1 : NU[ir]) - (il < 0 ? -1 : NU[il])) * 0.8;
       wd += ((il < 0 ? 2 : G[il]) - (ir < 0 ? 2 : G[ir])) * 1.4;
       if (sd0 < marge * 3.5) { const sl = Lt.sd(xl, yl), sr = Lt.sd(xr, yr); wd += clamp((sr - sl) * 0.25, -4, 4) * lisse(marge * 3.5, marge, sd0); }
       if (ic >= 0 && G[ic] > 0.95 && p.gen > 0 && Math.random() < dt * 3) {
@@ -442,7 +446,7 @@
         return false;
       }
       p.nz += -p.nz * 1.2 * dt + gauss() * Math.sqrt(dt);
-      wd += p.nz * 0.55;
+      wd += p.nz * 0.8;
       p.w += (clamp(wd, -4, 4) - p.w) * Math.min(1, dt * 6);
       p.a += p.w * dt;
       const nl = NU[i0];
@@ -458,19 +462,20 @@
       if (i1 >= 0) { const g0 = G[i1]; G[i1] = Math.min(3, g0 + ds * 0.085); if (g0 < 0.3 && G[i1] >= 0.3) couvert++; }
       const mx = p.x - p.lx, my = p.y - p.ly;
       if (mx * mx + my * my > 6.25) {
-        const c = couleurs[p.col], f = p.gen === 0 ? 0.95 : p.gen < 3 ? 0.8 : 0.68, l = p.gen === 0 ? 1.7 : p.gen < 3 ? 1.25 : 1;
+        const c = p.menthe ? MENTHE : couleurs[p.col], f = (p.gen === 0 ? 0.75 : p.gen < 3 ? 0.62 : 0.52) * (p.menthe ? 0.6 : 1), l = p.gen === 0 ? 1.7 : p.gen < 3 ? 1.25 : 1;
         segs.push(p.lx, p.ly, p.x, p.y, c[0] * f, c[1] * f, c[2] * f, 0, l);
         p.lx = p.x; p.ly = p.y;
       }
       p.dn += ds;
       if (p.dn > 8) { p.nd = noeud(p.x, p.y, p.nd, 1, p.col); p.dn = 0; }
-      p.bc += (ds / 30) * (0.4 + 0.6 * Math.min(1.3, nl)) * (p.gen > 5 ? 0.6 : 1);
+      p.bc += (ds / 20) * (0.4 + 0.6 * Math.min(1.3, nl)) * (p.gen > 5 ? 0.6 : 1);
       if (p.bc >= 1) {
         p.bc = 0;
         if (p.e > 0.6) {
           p.nd = noeud(p.x, p.y, p.nd, 1, p.col); p.dn = 0;
           const side = Math.random() < 0.5 ? -1 : 1;
-          pointe(1, p.x, p.y, p.a + side * rnd(1.05, 0.55), p.gen + 1, p.nd, p.e * 0.5, p.col);
+          pointe(1, p.x, p.y, p.a + side * rnd(1.25, 0.6), p.gen + 1, p.nd, p.e * 0.5, p.col);
+          if (Math.random() < 0.015) pointes[pointes.length - 1].menthe = true;
           p.e *= 0.6; p.a -= side * 0.12;
         }
       }
@@ -498,7 +503,7 @@
           // une spore blanche germe là où le mot est encore clair
           for (let e = 0; e < 12; e++) {
             const x = rnd(Lt.box[2], Lt.box[0]), y = rnd(Lt.box[3], Lt.box[1]), c = ci(x, y);
-            if (Lt.estAccent(x, y)) { if (t > 7.5 && brinsAccent < 40) { brinsAccent++; germer({ k: 2 }); } break; }
+            if (Lt.estAccent(x, y)) { if (t > 7.5 && brinsAccent < 40 && Lt.accent) { brinsAccent++; germer({ k: 2 }); } break; }
             if (c >= 0 && WD[c] < 0.5 && Lt.sd(x, y) < -3 * kL) { const r = noeud(x, y, -1, 0, 0); pointe(0, x, y, rnd(TAU), 1, r, 1.6, 0); pointe(0, x, y, rnd(TAU), 1, r, 1.6, 0); break; }
           }
         } else {
