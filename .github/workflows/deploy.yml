@@ -28,14 +28,32 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Préparer la clé SSH
+        env:
+          CLE: ${{ secrets.EX2_SSH_KEY }}
         run: |
           install -m 700 -d ~/.ssh
-          printf '%s\n' "${{ secrets.EX2_SSH_KEY }}" > ~/.ssh/id_deploiement
-          chmod 600 ~/.ssh/id_deploiement
-          # cPanel impose une phrase de passe : on la retire sur le runner (copie jetable).
-          if [ -n "$PHRASE" ]; then
-            ssh-keygen -p -q -P "$PHRASE" -N "" -f ~/.ssh/id_deploiement
+          brut=$(mktemp)
+          printf '%s\n' "$CLE" | tr -d '\r' > "$brut"
+          # Diagnostic sans rien révéler : forme du texte collé.
+          echo "Lignes : $(wc -l < "$brut") ; blocs BEGIN : $(grep -c -- '-----BEGIN' "$brut" || true) ; PuTTY : $(grep -c 'PuTTY-User-Key-File' "$brut" || true)"
+          if grep -q 'PuTTY-User-Key-File' "$brut"; then
+            echo "Format PuTTY (.ppk) : conversion en OpenSSH."
+            sudo apt-get install -y -qq putty-tools >/dev/null
+            phr=$(mktemp); printf '%s' "$PHRASE" > "$phr"
+            puttygen "$brut" --old-passphrase "$phr" -O private-openssh -o ~/.ssh/id_deploiement
+            rm -f "$phr"
+          else
+            # On ne garde que le bloc BEGIN … END, même entouré d'autre texte.
+            sed -n '/-----BEGIN [A-Z ]*PRIVATE KEY-----/,/-----END [A-Z ]*PRIVATE KEY-----/p' "$brut" > ~/.ssh/id_deploiement
+            echo "Type : $(head -1 ~/.ssh/id_deploiement | sed 's/-----BEGIN \(.*\) KEY-----/\1/' | tr 'A-Z' 'a-z')"
+            chmod 600 ~/.ssh/id_deploiement
+            if [ -n "$PHRASE" ] && ! ssh-keygen -y -P "" -f ~/.ssh/id_deploiement >/dev/null 2>&1; then
+              ssh-keygen -p -q -P "$PHRASE" -N "" -f ~/.ssh/id_deploiement
+            fi
           fi
+          rm -f "$brut"
+          chmod 600 ~/.ssh/id_deploiement
+          ssh-keygen -y -f ~/.ssh/id_deploiement > /dev/null && echo "Clé lisible."
           ssh-keyscan -p "$PORT" "$HOTE" > ~/.ssh/known_hosts 2>/dev/null
           echo "Empreintes du serveur (à comparer à celles de cPanel) :"
           ssh-keygen -lf ~/.ssh/known_hosts
