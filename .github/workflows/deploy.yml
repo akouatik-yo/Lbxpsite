@@ -35,7 +35,11 @@ jobs:
           brut=$(mktemp)
           printf '%s\n' "$CLE" | tr -d '\r' > "$brut"
           # Diagnostic sans rien révéler : forme du texte collé.
-          echo "Lignes : $(wc -l < "$brut") ; blocs BEGIN : $(grep -c -- '-----BEGIN' "$brut" || true) ; PuTTY : $(grep -c 'PuTTY-User-Key-File' "$brut" || true)"
+          echo "Lignes : $(wc -l < "$brut") ; BEGIN : $(grep -c -- '-----BEGIN' "$brut" || true) ; END : $(grep -c -- '-----END' "$brut" || true) ; PuTTY : $(grep -c 'PuTTY-User-Key-File' "$brut" || true) ; ENCRYPTED : $(grep -c 'ENCRYPTED' "$brut" || true) ; clé publique ssh-rsa : $(grep -c '^ssh-' "$brut" || true) ; ligne la plus longue : $(awk '{ if (length > m) m = length } END { print m+0 }' "$brut")"
+          if ! grep -q -- '-----BEGIN' "$brut" && ! grep -q 'PuTTY-User-Key-File' "$brut"; then
+            echo "::error::Le secret EX2_SSH_KEY ne contient pas de clé privée complète (pas de ligne -----BEGIN). Recopier toute la clé depuis cPanel."
+            exit 1
+          fi
           if grep -q 'PuTTY-User-Key-File' "$brut"; then
             echo "Format PuTTY (.ppk) : conversion en OpenSSH."
             sudo apt-get install -y -qq putty-tools >/dev/null
