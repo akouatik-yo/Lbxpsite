@@ -1,27 +1,675 @@
 <!doctype html>
+<!--
+  Le Geek des Bois · page d'attente « Bientôt »
+  Mycélium d'après le moteur « Le Mycélium » de Fascinations
+  (https://github.com/akouatik-yo/Fascination, branche jeunesse), de Yoann.
+  Réécrit pour WebGL2 par l'équipe technique de Yoann Corp.
+
+  Copyright (C) 2026 Yoann
+  Ce programme est un logiciel libre : vous pouvez le redistribuer et/ou le
+  modifier selon les termes de la GNU General Public License, version 3 ou
+  ultérieure, publiée par la Free Software Foundation. Il est distribué sans
+  aucune garantie. Texte de la licence : https://www.gnu.org/licenses/gpl-3.0.html
+
+  Police du masque des lettres : Archivo ExtraBold (sous-ensemble « BIENTÔ »),
+  Copyright 2020 The Archivo Project Authors, SIL Open Font License 1.1
+  (texte complet : polices/Archivo-OFL.txt).
+-->
 <html lang="fr">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Le Geek des Bois</title>
-<meta name="description" content="Le site de Yoann, depuis sa cabane en forêt. En construction.">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Le Geek des Bois — bientôt</title>
+<meta name="description" content="Bientôt.">
+<meta name="theme-color" content="#000000">
+<meta name="color-scheme" content="dark">
 <style>
-  :root { --fond: #f4f1ea; --texte: #2b2a26; --discret: #6b675d; }
-  @media (prefers-color-scheme: dark) { :root { --fond: #1c1d1a; --texte: #e8e4d9; --discret: #a29d90; } }
-  html, body { height: 100%; margin: 0; }
-  body { background: var(--fond); color: var(--texte); font: 18px/1.6 Georgia, "Times New Roman", serif;
-         display: grid; place-items: center; padding: 0 16px; }
-  main { max-width: 32rem; text-align: center; }
-  h1 { font-weight: normal; font-size: 2.2rem; margin: 0 0 .5rem; }
-  p { margin: .4rem 0; }
-  .discret { color: var(--discret); font-size: .9rem; }
+  html, body { margin: 0; height: 100%; background: #000; overflow: hidden; }
+  #toile { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
+  .repli { position: fixed; inset: 0; margin: 0; display: flex; align-items: center; justify-content: center;
+           color: #fff5df; font: 800 clamp(2.4rem, 13vw, 9rem)/1 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+           letter-spacing: .06em; padding: 0 16px; }
+  .gl .repli { display: none; }
 </style>
 </head>
 <body>
-<main>
-  <h1>Le Geek des Bois</h1>
-  <p>Le site est en construction, quelque part en forêt.</p>
-  <p class="discret">Page provisoire, en attendant la maquette.</p>
-</main>
+<canvas id="toile" role="img" aria-label="Bientôt"></canvas>
+<p class="repli">Bientôt</p>
+<script>
+'use strict';
+(() => {
+  const toile = document.getElementById('toile');
+  const gl = toile.getContext('webgl2', { alpha: false, antialias: false, depth: false, stencil: false, premultipliedAlpha: false });
+  if (!gl) return; // repli : le mot en blanc sur noir reste affiché
+  const ralenti = matchMedia('(prefers-reduced-motion: reduce)');
+
+  /* ───────── outils ───────── */
+  const TAU = Math.PI * 2, clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
+  const rnd = (a = 1, b = 0) => b + Math.random() * (a - b), rint = (n) => (Math.random() * n) | 0;
+  const gauss = () => (Math.random() + Math.random() + Math.random() + Math.random() - 2) * 1.22;
+  const lisse = (a, b, x) => { const t = clamp((x - a) / (b - a), 0, 1); return t * t * (3 - 2 * t); };
+  const POLICE = '"ArchivoMasque", "Segoe UI", Roboto, "Helvetica Neue", Arial, system-ui, sans-serif';
+  const FONTE = 'data:font/woff2;base64,d09GMgABAAAAAAXQABAAAAAAC4gAAAV0AAEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAGi4bgxQcgVgGYD9TVEFUWgB8EQgKhjSFCgscAAE2AiQDMgQgBYR4ByAMBxusCcgEAmJT7x/ICMRqE2VmaSeiFcvMRPHrl86mCh8bigchGay5vNuUzWZp7dNaEx5hqz53hwqo5BxxGIlqQnWLxqw2WQ6te/BgmdTk8e1yBBIPQWdapNspcPoLTVwoCBjQU+AIe8UZZCMGWb5iVABP20Zd2+NBzTpq2yjPkpk2zTq359/ydpCyXZt2bQglFT5MH1LYTgQ6DnwIDMJtLnMRDMeFxEIHgmNKgjEH5fEKRDSkszvVvcc3xIWT8pSkMHnJRRYsUhKKEPFyA0JMy9Uspm2zo+fNLOORZUfSJibcJtgNouELDRSfSAtyLE/fQemVX1WiI2mK0Uy25kyVpzCq7BHsp4z2rZsREpZKFJKgK6tJPJEE1lHFOHE2Ql1CJThGjNzUKFQBmjWoQ8XLGGQi/+WwlV7TpEm7jui5tzpoTk1q4pkTAwStHElR8lJUvJGEVrnvYql26ehI1FuE9s670uDiSEnBqMpkwRAFEernOC+VTtHRYLIXm6iylWJVNiD3ytF2buzydnGPvPxmlFmIKTsO681NmrCLjo2OqcJBLEUq7W0/qFFitoWYQg9Ij1xv1FJcdCUldJ4vF7JH064thYAeLVp2dReKVl0btRUpzVQGkuK4PD1SpLqcyZt4VDgVS9CQSEbTmNQlAivIeCgqLU1SfMr7syhLBaoQS4DTnOeqIm27SUTViPFlv7YP2PvsPfZOe5tdxC5k5//nZDxytFQgbBuvHXYHU3Iyn9+FWj51WBWtYfVyWqcIeg6qoihKqGG4XLqq6il8SX1JdV3XTc2tNnZXD9So3kwJ+Gu4TM095to1Bm48m4lt564x8OpVo7o55oAYtH63YQhzzJo1YtB+wzA1Ly7cuHBjal5cuIFn6xpmNaO6GTA1U7X275daa9qqVWHJBg0SiqkazaevTxo6cCCy0ejr18WgGzfMMn8NV69WH3PjyA0hBl0/fN0YffXgVRh47dC1FPX1S1pqCC+GqpmWCoFlIWYgcu/XvUvyBFb9P3Fp1f9V/yf8CzJ38b8DRG5YWqBa9ryR+XJ/yPpLrbQzQ4W8xQol1MlZ5MuoI1azrGGI5AcHbEn6yJvUSkyznegNhcYOHZQ4KnHcmLE7Pp6+7Dlkdo8hw+o2KFKvAZEbtmwYeKZ52XPIrJ5DhtVrUKTuqSdb8Ktki3b1K5dOmt1TavmG+XrshUatS/vSm3FMNTstjKk2r0ePanMXxnTaBucG5v11Oo7JWSbFobBKuXP5wyodKpMiZ64yKTaFVfLnyh1WaVOZFJm2zWrZc8jsnkOGN/ajfqR+MKXTlAepies5ZGKPIQPrNhhYrz6vWpR+SO6TlPU3LaA18Bb/pivKy1ODd/6l3rR0vVu4VJCd6X8brZMaBXE8NnYOenAda1PsTH9/aZ1udm+XHE2kfEWk3EP0NCaqEOlhP1RCiFRykNtaI5eQnH0G+Ze6aUMSKt3uB0a03+Vh/SOQVV9KPStFhm2XIENtbOBTqZ9RqVCY3efV+EqNlCysdJCB/hUe8lN1hQAXJYGXu+ZHpZNgMnAyE03KKRE1JNWHspQEOtCORrSnCl1pRFta0YQYOtCZmmhLBXr63NnkL0sH2tKUGrSiKV1p6XEzcAugX0hXutKRooQTThea0JlWPnftsR8WTFv8nG4tCCeWikRRxnqvJrSkFd3pQO5qOqvTzCCnhZe3xyIvfiKIIM+6ejFiiSaGKidkCyY4a0E32tKIzmlrs5aWowMd6SWERKIBEjF1bhGgJc2wOO6KozMdaE0zmqQ2ZeimD6TPdcEim1baxTctaBXb2Y3GPWlySaDRZ2tHe1rRmG50ITcBetGRZoRXlsv+25DwL2xLrif64p3CHrZRHQcA';
+  const MOT = 'BIENTÔT';
+
+  /* gamme de verts (note de direction artistique) : sombres nombreux, lumineux rares */
+  const hex = (h) => [1, 3, 5].map((i) => parseInt(h.substr(i, 2), 16) / 255);
+  const VERTS = [
+    ['#0B2418', 0.22], ['#17402A', 0.26], ['#2C6234', 0.22], // forêt profonde, sous-bois, mousse
+    ['#4F8A3A', 0.15], ['#86B843', 0.10],                    // fougère, lichen
+    ['#BEE33A', 0.03], ['#84D7C5', 0.02],                    // pousse, menthe
+  ].map(([h, p]) => [hex(h), p]);
+  const ACIDE = hex('#D6F51A'), IVOIRE = hex('#FFF5DF');
+
+  /* ───────── WebGL : programmes ───────── */
+  function shader(type, src) {
+    const s = gl.createShader(type); gl.shaderSource(s, src); gl.compileShader(s);
+    if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(s));
+    return s;
+  }
+  function prog(vs, fs, attrs) {
+    const p = gl.createProgram();
+    gl.attachShader(p, shader(gl.VERTEX_SHADER, '#version 300 es\nprecision highp float;\n' + vs));
+    gl.attachShader(p, shader(gl.FRAGMENT_SHADER, '#version 300 es\nprecision mediump float;\n' + fs));
+    (attrs || []).forEach((a, i) => gl.bindAttribLocation(p, i, a));
+    gl.linkProgram(p);
+    if (!gl.getProgramParameter(p, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(p));
+    const u = {}, n = gl.getProgramParameter(p, gl.ACTIVE_UNIFORMS);
+    for (let i = 0; i < n; i++) { const nm = gl.getActiveUniform(p, i).name; u[nm] = gl.getUniformLocation(p, nm); }
+    return { p, u };
+  }
+  const VS_PLEIN = 'out vec2 v;void main(){vec2 p=vec2(float((gl_VertexID<<1)&2),float(gl_VertexID&2));v=p;gl_Position=vec4(p*2.-1.,0.,1.);}';
+  let P;
+  try {
+    P = {
+      // hyphes : quads antialiasés accumulés (rgb = verts, a = blanc)
+      seg: prog(
+        'layout(location=0) in vec2 a_p;layout(location=1) in float a_n;layout(location=2) in vec4 a_c;uniform vec2 u_res;out float vn;out vec4 vc;' +
+        'void main(){vn=a_n;vc=a_c;gl_Position=vec4(a_p.x/u_res.x*2.-1.,1.-a_p.y/u_res.y*2.,0.,1.);}',
+        'in float vn;in vec4 vc;out vec4 o;void main(){float k=1.-vn*vn;o=vc*k;}', ['a_p', 'a_n', 'a_c']),
+      // pointes et impulsions
+      pt: prog(
+        'layout(location=0) in vec2 a_p;layout(location=1) in float a_s;layout(location=2) in vec4 a_c;uniform vec2 u_res;uniform float u_dpr;out vec4 vc;' +
+        'void main(){vc=a_c;gl_PointSize=a_s*u_dpr;gl_Position=vec4(a_p.x/u_res.x*2.-1.,1.-a_p.y/u_res.y*2.,0.,1.);}',
+        'in vec4 vc;out vec4 o;void main(){vec2 d=gl_PointCoord*2.-1.;float r=dot(d,d);o=vec4(vc.rgb*vc.a*exp(-r*4.5),0.);}', ['a_p', 'a_s', 'a_c']),
+      // réduction + tonalité pour le halo
+      bas: prog(VS_PLEIN,
+        'in vec2 v;uniform sampler2D u_t;uniform sampler2D u_m;out vec4 o;void main(){vec4 a=texture(u_t,v);float m=texture(u_m,vec2(v.x,1.-v.y)).r;' +
+        'vec3 g=(1.-exp(-a.rgb*1.3))*(1.-.8*m);float w=1.-exp(-a.a*1.5);o=vec4(g,w);}'),
+      flou: prog(VS_PLEIN,
+        'in vec2 v;uniform sampler2D u_t;uniform vec2 u_d;out vec4 o;void main(){' +
+        'o=texture(u_t,v)*.2270270270+(texture(u_t,v+u_d*1.3846153846)+texture(u_t,v-u_d*1.3846153846))*.3162162162' +
+        '+(texture(u_t,v+u_d*3.2307692308)+texture(u_t,v-u_d*3.2307692308))*.0702702703;}'),
+      // composition finale : tonalité, masque du mot, halo, vignettage, grain
+      fin: prog(VS_PLEIN,
+        'in vec2 v;uniform sampler2D u_t;uniform sampler2D u_b1;uniform sampler2D u_b2;uniform sampler2D u_m;uniform float u_tps;uniform float u_eclat;uniform vec2 u_px;out vec4 o;' +
+        'float h(vec2 p){return fract(sin(dot(p,vec2(12.9898,78.233)))*43758.5453);}' +
+        'void main(){vec4 a=texture(u_t,v);float m=texture(u_m,vec2(v.x,1.-v.y)).r;' +
+        'vec3 g=(1.-exp(-a.rgb*1.25))*(1.-.88*m);float w=1.-exp(-a.a*u_eclat);' +
+        'vec3 c=g+w*vec3(1.,.96,.875);' +
+        'vec4 b=texture(u_b1,v)*.5+texture(u_b2,v)*.5;' +
+        'c+=b.rgb*.32+b.a*vec3(1.,.96,.875)*.38;' +
+        'vec2 r=(v-.5)*vec2(u_px.y/u_px.x,1.);c*=1.+.07*sin(u_tps*.785398-length(r)*9.);' +
+        'vec2 q=v-.5;c*=1.-smoothstep(.35,.95,length(q*vec2(1.15,1.)))*.55;' +
+        'float l=dot(c,vec3(.3,.5,.2));c+=(h(v/u_px+fract(u_tps*7.3))-.5)*(.012+.05*l);' +
+        'o=vec4(max(c,0.),1.);}'),
+    };
+  } catch (e) { console.warn('WebGL indisponible :', e.message); return; }
+
+  gl.getExtension('EXT_color_buffer_float');
+  const halfOK = !!(gl.getExtension('EXT_color_buffer_half_float') || gl.getExtension('EXT_color_buffer_float'));
+  const vaoVide = gl.createVertexArray();
+
+  /* tampons dynamiques */
+  const SEG_MAX = 6000, SEG_F = 7 * 6; // 6 sommets × (x, y, n, r, g, b, a)
+  const segData = new Float32Array(SEG_MAX * SEG_F);
+  const segVBO = gl.createBuffer(), segVAO = gl.createVertexArray();
+  gl.bindVertexArray(segVAO); gl.bindBuffer(gl.ARRAY_BUFFER, segVBO);
+  gl.bufferData(gl.ARRAY_BUFFER, segData.byteLength, gl.DYNAMIC_DRAW);
+  gl.enableVertexAttribArray(0); gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 28, 0);
+  gl.enableVertexAttribArray(1); gl.vertexAttribPointer(1, 1, gl.FLOAT, false, 28, 8);
+  gl.enableVertexAttribArray(2); gl.vertexAttribPointer(2, 4, gl.FLOAT, false, 28, 12);
+  const PT_MAX = 4000, ptData = new Float32Array(PT_MAX * 7);
+  const ptVBO = gl.createBuffer(), ptVAO = gl.createVertexArray();
+  gl.bindVertexArray(ptVAO); gl.bindBuffer(gl.ARRAY_BUFFER, ptVBO);
+  gl.bufferData(gl.ARRAY_BUFFER, ptData.byteLength, gl.DYNAMIC_DRAW);
+  gl.enableVertexAttribArray(0); gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 28, 0);
+  gl.enableVertexAttribArray(1); gl.vertexAttribPointer(1, 1, gl.FLOAT, false, 28, 8);
+  gl.enableVertexAttribArray(2); gl.vertexAttribPointer(2, 4, gl.FLOAT, false, 28, 12);
+  gl.bindVertexArray(null);
+
+  function cible(w, h, flottant) {
+    const t = gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D, t);
+    if (flottant) gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA16F, w, h, 0, gl.RGBA, gl.HALF_FLOAT, null);
+    else gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, w, h, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    const f = gl.createFramebuffer(); gl.bindFramebuffer(gl.FRAMEBUFFER, f);
+    gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, t, 0);
+    const ok = gl.checkFramebufferStatus(gl.FRAMEBUFFER) === gl.FRAMEBUFFER_COMPLETE;
+    gl.clearColor(0, 0, 0, 0); gl.clear(gl.COLOR_BUFFER_BIT);
+    return ok ? { t, f, w, h } : null;
+  }
+
+  /* ───────── état du monde ───────── */
+  let W, H, dpr, RW, RH, kS, kL, T, S, acc, b1a, b1b, b2a, b2b, masqueTex = null;
+
+  function construire() {
+    W = Math.max(1, innerWidth); H = Math.max(1, innerHeight);
+    dpr = Math.min(devicePixelRatio || 1, 1.5);
+    while (W * H * dpr * dpr > 2.4e6 && dpr > 1) dpr = Math.max(1, dpr - 0.25);
+    RW = Math.round(W * dpr); RH = Math.round(H * dpr);
+    toile.width = RW; toile.height = RH;
+    kS = clamp(Math.min(W, H) / 800, 0.6, 1.4);
+    for (const c of [acc, b1a, b1b, b2a, b2b]) if (c) { gl.deleteTexture(c.t); gl.deleteFramebuffer(c.f); }
+    acc = (halfOK && cible(RW, RH, true)) || cible(RW, RH, false);
+    const w4 = Math.max(1, RW >> 2), h4 = Math.max(1, RH >> 2), w8 = Math.max(1, RW >> 3), h8 = Math.max(1, RH >> 3);
+    b1a = cible(w4, h4, false); b1b = cible(w4, h4, false); b2a = cible(w8, h8, false); b2b = cible(w8, h8, false);
+    S = monde();
+    T = 0;
+  }
+
+  /* le mot : masque, champ de distance signé (px CSS, négatif à l'intérieur) */
+  function lettres() {
+    const c = document.createElement('canvas'); c.width = W; c.height = H;
+    const g = c.getContext('2d');
+    const portrait = H > W * 1.1;
+    let fs = 100; g.font = `800 ${fs}px ${POLICE}`;
+    const esp = 0.05;
+    const largeur = (f) => { g.font = `800 ${f}px ${POLICE}`; return g.measureText(MOT).width + f * esp * (MOT.length - 1); };
+    fs = Math.min((W * (portrait ? 0.94 : 0.8)) / (largeur(100) / 100), H * 0.3);
+    g.font = `800 ${fs}px ${POLICE}`;
+    const m = g.measureText(MOT), asc = m.actualBoundingBoxAscent || fs * 0.95, desc = m.actualBoundingBoxDescent || 0;
+    const L = largeur(fs), y0 = H * 0.5 + (asc - desc) / 2;
+    const ecrire = (ctx) => {
+      ctx.font = `800 ${fs}px ${POLICE}`; ctx.textBaseline = 'alphabetic';
+      let x = (W - L) / 2;
+      for (const ch of MOT) { ctx.fillText(ch, x, y0); x += ctx.measureText(ch).width + fs * esp; }
+    };
+    g.fillStyle = '#fff'; ecrire(g);
+    const img = g.getImageData(0, 0, W, H).data;
+    const LC = 3, LW = Math.ceil(W / LC), LH = Math.ceil(H / LC), n = LW * LH;
+    const dedans = new Uint8Array(n), dehors = new Uint8Array(n);
+    let aire = 0;
+    for (let y = 0; y < LH; y++) for (let x = 0; x < LW; x++) {
+      const px = Math.min(W - 1, x * LC + 1), py = Math.min(H - 1, y * LC + 1);
+      const i = y * LW + x, v = img[(py * W + px) * 4 + 3] > 127;
+      dedans[i] = v ? 1 : 0; dehors[i] = v ? 0 : 1; if (v) aire++;
+    }
+    const chanfrein = (src) => {
+      const d = new Float32Array(n).fill(1e6);
+      for (let i = 0; i < n; i++) if (src[i]) d[i] = 0;
+      const R = 1.4142;
+      for (let y = 0; y < LH; y++) for (let x = 0; x < LW; x++) {
+        const i = y * LW + x; let v = d[i];
+        if (x > 0) v = Math.min(v, d[i - 1] + 1);
+        if (y > 0) { v = Math.min(v, d[i - LW] + 1); if (x > 0) v = Math.min(v, d[i - LW - 1] + R); if (x < LW - 1) v = Math.min(v, d[i - LW + 1] + R); }
+        d[i] = v;
+      }
+      for (let y = LH - 1; y >= 0; y--) for (let x = LW - 1; x >= 0; x--) {
+        const i = y * LW + x; let v = d[i];
+        if (x < LW - 1) v = Math.min(v, d[i + 1] + 1);
+        if (y < LH - 1) { v = Math.min(v, d[i + LW] + 1); if (x < LW - 1) v = Math.min(v, d[i + LW + 1] + R); if (x > 0) v = Math.min(v, d[i + LW - 1] + R); }
+        d[i] = v;
+      }
+      return d;
+    };
+    const dOut = chanfrein(dedans), dIn = chanfrein(dehors), SD = new Float32Array(n);
+    let epais = 0;
+    for (let i = 0; i < n; i++) { SD[i] = (dOut[i] - dIn[i]) * LC; if (dedans[i]) epais = Math.max(epais, dIn[i] * LC); }
+    // masque adouci pour la composition : les verts ne passent jamais sur le mot
+    const c2 = document.createElement('canvas'); c2.width = Math.ceil(W / 2); c2.height = Math.ceil(H / 2);
+    const g2 = c2.getContext('2d'); g2.scale(0.5, 0.5);
+    g2.fillStyle = '#000'; g2.fillRect(0, 0, W, H);
+    g2.filter = `blur(${Math.max(2, fs * 0.07)}px)`;
+    g2.fillStyle = '#fff'; g2.strokeStyle = '#fff'; g2.lineWidth = fs * 0.16; g2.lineJoin = 'round';
+    g2.font = `800 ${fs}px ${POLICE}`;
+    { let x = (W - L) / 2; for (const ch of MOT) { g2.strokeText(ch, x, y0); g2.fillText(ch, x, y0); x += g2.measureText(ch).width + fs * esp; } }
+    if (!masqueTex) masqueTex = gl.createTexture();
+    gl.bindTexture(gl.TEXTURE_2D, masqueTex);
+    gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, c2);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    const sd = (x, y) => {
+      const gx = (x / LC) | 0, gy = (y / LC) | 0;
+      return gx < 0 || gy < 0 || gx >= LW || gy >= LH ? 1e4 : SD[gy * LW + gx];
+    };
+    // l'accent du Ô : la part du glyphe au-dessus du O
+    const ACC = new Uint8Array(n);
+    let accent = null;
+    {
+      g.font = `800 ${fs}px ${POLICE}`;
+      let x = (W - L) / 2, xO = 0, wO = 0;
+      for (const ch of MOT) { const w = g.measureText(ch).width; if (ch === 'Ô') { xO = x; wO = w; } x += w + fs * esp; }
+      const mO = g.measureText('O'), hautO = y0 - (mO.actualBoundingBoxAscent || fs * 0.72);
+      const pts = [];
+      for (let y = 0; y < LH; y++) for (let x2 = 0; x2 < LW; x2++) {
+        const px = x2 * LC + 1, py = y * LC + 1;
+        if (dedans[y * LW + x2] && px >= xO && px <= xO + wO && py < hautO - fs * 0.02) { ACC[y * LW + x2] = 1; pts.push(px, py); }
+      }
+      if (pts.length >= 12) {
+        let x0 = 1e9, x1 = -1e9;
+        for (let i = 0; i < pts.length; i += 2) { x0 = Math.min(x0, pts[i]); x1 = Math.max(x1, pts[i]); }
+        const moy = (f) => { let sx = 0, sy = 0, k = 0; for (let i = 0; i < pts.length; i += 2) if (f(pts[i])) { sx += pts[i]; sy += pts[i + 1]; k++; } return k ? [sx / k, sy / k] : null; };
+        const lw = x1 - x0, cx = (x0 + x1) / 2;
+        const gch = moy((px) => px < x0 + lw * 0.14), dr = moy((px) => px > x1 - lw * 0.14), so = moy((px) => Math.abs(px - cx) < lw * 0.07);
+        if (gch && dr && so) accent = { g: gch, d: dr, s: so };
+      }
+    }
+    const estAccent = (x, y) => { const gx = (x / LC) | 0, gy = (y / LC) | 0; return gx >= 0 && gy >= 0 && gx < LW && gy < LH && ACC[gy * LW + gx] === 1; };
+    return { sd, estAccent, accent, fs, aire: aire * LC * LC, epais, LW, LH, LC, SD, box: [(W - L) / 2, y0 - asc, (W + L) / 2, y0 + desc] };
+  }
+
+  function monde() {
+    const Lt = lettres();
+    kL = clamp(Lt.fs / 190, 0.3, 1.6);
+    const fin = clamp(0.5 + 0.5 * kL, 0.62, 1.15), kM = Math.max(kL, 0.62); // petits écrans : allure plancher // finesse des hyphes blanches selon la taille du mot
+    const CS = 6, GW = Math.ceil(W / CS), GH = Math.ceil(H / CS), NC = GW * GH;
+    const G = new Float32Array(NC), WD = new Float32Array(NC), NU = new Float32Array(NC), NG = new Int32Array(NC).fill(-1);
+    const ci = (x, y) => (x < 0 || y < 0 || x >= W || y >= H ? -1 : ((y / CS) | 0) * GW + ((x / CS) | 0));
+    // substrat nourricier inégal : les verts s'étendent par vagues, pas en tache d'huile
+    const taches = [];
+    for (let i = 0; i < 16; i++) taches.push([rnd(W), rnd(H), rnd(W * 0.2, W * 0.05), rnd(0.75, 0.25)]);
+    for (let gy = 0; gy < GH; gy++) for (let gx = 0; gx < GW; gx++) {
+      const x = (gx + 0.5) * CS, y = (gy + 0.5) * CS;
+      let v = 0.62 + rnd(0.14);
+      for (const b of taches) { const dx = x - b[0], dy = y - b[1]; v += b[3] * Math.exp(-(dx * dx + dy * dy) / (b[2] * b[2])); }
+      NU[gy * GW + gx] = v;
+    }
+    // graphe du réseau (pour les impulsions et l'anastomose)
+    const NMAX = 240000, NX = new Float32Array(NMAX), NY = new Float32Array(NMAX), NP = new Int32Array(NMAX), NK = new Uint8Array(NMAX), NCOL = new Uint8Array(NMAX);
+    let nN = 0;
+    const blancs = [];
+    function noeud(x, y, p, k, col) {
+      if (nN >= NMAX) return p;
+      const n = nN++;
+      NX[n] = x; NY[n] = y; NP[n] = p; NK[n] = k; NCOL[n] = col;
+      const c = ci(x, y); if (c >= 0) NG[c] = n;
+      if (k === 0 && Lt.sd(x, y) < -2) blancs.push(n);
+      return n;
+    }
+    const pointes = [], semis = [], impulsions = [];
+    let nb = 0, nv = 0;
+    const aireTot = W * H;
+    const VMAX = Math.round(clamp(aireTot / 1500, 260, 1000));
+    const BMAX = Math.round(clamp(Lt.aire / 210, 120, 900));
+    const segs = []; // x0,y0,x1,y1,r,g,b,a,largeur
+    const pointe = (k, x, y, a, gen, nd, e, col) => {
+      if (k === 0) { if (nb >= BMAX) return; nb++; } else { if (nv >= VMAX) return; nv++; }
+      pointes.push({ k, x, y, a, gen, nd, e, col, w: 0, nz: 0, bc: rnd(0.5), lx: x, ly: y, dn: 0, age: 0 });
+    };
+    const couleurs = [];
+    const nouvelleTeinte = () => {
+      let u = Math.random(), b = VERTS[0][0];
+      for (const [c, p] of VERTS) { if (u < p) { b = c; break; } u -= p; }
+      const j = rnd(1.1, 0.9);
+      couleurs.push([b[0] * j, b[1] * j, b[2] * j]);
+      return couleurs.length - 1;
+    };
+
+    // le mot germe d'abord : des spores blanches dans les lettres, échelonnées sur 1,5 s
+    // semis réparti (aucune lettre oubliée) : points intérieurs espacés d'au moins R
+    {
+      const R = Math.max(10, Lt.fs * 0.16), R2 = R * R, pris = [];
+      for (let essais = 0; essais < 30000; essais++) {
+        const x = rnd(Lt.box[2], Lt.box[0]), y = rnd(Lt.box[3], Lt.box[1]);
+        if (Lt.sd(x, y) > -Math.min(Lt.epais * 0.4, 6 * kL) || Lt.estAccent(x, y)) continue;
+        let ok = true;
+        for (let j = 0; j < pris.length; j += 2) { const dx = pris[j] - x, dy = pris[j + 1] - y; if (dx * dx + dy * dy < R2) { ok = false; break; } }
+        if (ok) { pris.push(x, y); semis.push({ t: rnd(1.6), k: 0, x, y }); }
+      }
+    }
+    // l'accent pousse en dernier : deux hyphes partent des pieds du chevron et se rejoignent au sommet
+    if (Lt.accent) for (let i = 0; i < 6; i++) semis.push({ t: 3.4 + i * 0.55 + rnd(0.2), k: 2 });
+    const jonctions = [];
+    // puis les verts, lentement, depuis les bords et les vides
+    const lieuVide = (marge) => {
+      for (let e = 0; e < 60; e++) {
+        const bord = Math.random() < 0.45;
+        let x, y;
+        if (bord) { const c = rint(4); x = c < 2 ? rnd(W) : c === 2 ? rnd(W * 0.06) : W - rnd(W * 0.06); y = c >= 2 ? rnd(H) : c === 0 ? rnd(H * 0.06) : H - rnd(H * 0.06); }
+        else { x = rnd(W * 0.96, W * 0.04); y = rnd(H * 0.96, H * 0.04); }
+        const i = ci(x, y);
+        if (i >= 0 && G[i] < 0.05 && Lt.sd(x, y) > marge) return [x, y];
+      }
+      return null;
+    };
+    let prochainVert = 0.8, compteVert = 0;
+
+    function germer(s) {
+      if (s.k === 2) {
+        const A = Lt.accent, j = () => rnd(2.5, -2.5) * kL;
+        for (const pied of [A.g, A.d]) {
+          const x = pied[0] + j(), y = pied[1] + j(), r = noeud(x, y, -1, 0, 0);
+          if (nb >= BMAX) nb--; // l'accent passe avant le plafond
+          pointe(0, x, y, Math.atan2(A.s[1] - y, A.s[0] - x), 1, r, 3, 0);
+          pointes[pointes.length - 1].cible = A.s;
+        }
+        return;
+      }
+      if (s.k === 0) {
+        const r = noeud(s.x, s.y, -1, 0, 0), k = 3 + rint(2), a0 = rnd(TAU);
+        for (let i = 0; i < k; i++) pointe(0, s.x, s.y, a0 + (i * TAU) / k + rnd(0.3, -0.3), 0, r, 2.2, 0);
+      } else {
+        const col = nouvelleTeinte(), r = noeud(s.x, s.y, -1, 1, col), k = 4 + rint(3), a0 = rnd(TAU);
+        for (let i = 0; i < k; i++) pointe(1, s.x, s.y, a0 + (i * TAU) / k + rnd(0.3, -0.3), 0, r, 2, col);
+      }
+    }
+
+    function impulsion(n, b) {
+      if (n < 0 || NP[n] < 0 || impulsions.length >= (basse ? 140 : 320)) return;
+      impulsions.push({ n, tgt: NP[n], f: 0, b, k: NK[n], col: NCOL[n] });
+    }
+
+    // facteurs d'âge : vigueur au début, maturité lente ensuite
+    const VV = 3.4, COUV = 0.64;
+    const vigueurVert = (t) => (t < 150 ? 1 : Math.max(0.3, 1 - ((t - 150) / 600) * 0.7));
+    const vitesseBlanc = (t) => (t < 9 ? 1 : t < 60 ? 1 - ((t - 9) / 51) * 0.6 : Math.max(0.16, 0.4 - ((t - 60) / 600) * 0.24));
+    const relanceBlanc = (t) => (t < 6 ? 0 : t < 120 ? 1.2 : t < 600 ? 0.5 : 0.18);
+
+    function pousserBlanc(p, dt, t) {
+      const i0 = ci(p.x, p.y); if (i0 < 0) return false;
+      const sd0 = Lt.sd(p.x, p.y);
+      if (sd0 > 9 * kM || (sd0 > 3 * kM && Math.random() < dt * 4)) return false;
+      const look = 7 * kM, aL = p.a - 0.6, aR = p.a + 0.6;
+      const xl = p.x + Math.cos(aL) * look, yl = p.y + Math.sin(aL) * look, xr = p.x + Math.cos(aR) * look, yr = p.y + Math.sin(aR) * look;
+      const xc = p.x + Math.cos(p.a) * look, yc = p.y + Math.sin(p.a) * look;
+      const il = ci(xl, yl), ir = ci(xr, yr), ic = ci(xc, yc);
+      let wd = ((il < 0 ? 3 : WD[il]) - (ir < 0 ? 3 : WD[ir])) * 1.1;
+      const sl = Lt.sd(xl, yl), sr = Lt.sd(xr, yr), sc = Lt.sd(xc, yc);
+      if (sc > -2.5 * kL || sd0 > -2 * kL) wd += clamp((sl - sr) * 0.5, -5, 5) + (sc > 0 ? (sl < sr ? -3 : 3) : 0);
+      if (p.cible) {
+        const dx = p.cible[0] - p.x, dy = p.cible[1] - p.y;
+        if (dx * dx + dy * dy < (2.5 * kL + 1.5) ** 2) {
+          segs.push(p.x, p.y, p.cible[0], p.cible[1], 0, 0, 0, 0.2, 1.3 * fin);
+          if (!jonctions.length) jonctions.push({ x: p.cible[0], y: p.cible[1], t, n: 1 }); else jonctions[0].n++;
+          return false;
+        }
+        let da = Math.atan2(dy, dx) - p.a; da = Math.atan2(Math.sin(da), Math.cos(da));
+        wd += clamp(da * 6, -6, 6);
+      } else if (ic >= 0 && WD[ic] > 1.7 && p.gen > 0 && Math.random() < dt * 2.5) {
+        const n = NG[ic];
+        if (n >= 0 && NK[n] === 0) segs.push(p.x, p.y, NX[n], NY[n], 0, 0, 0, 0.2, 1.1 * fin);
+        return false;
+      }
+      p.nz += -p.nz * 1.6 * dt + gauss() * 1.5 * Math.sqrt(dt);
+      wd += p.nz * (p.cible ? 0.3 : 0.8);
+      p.w += (clamp(wd, -6, 6) - p.w) * Math.min(1, dt * 8);
+      p.a += p.w * dt;
+      const ds = 34 * kM * dt * vitesseBlanc(t);
+      p.x += Math.cos(p.a) * ds; p.y += Math.sin(p.a) * ds;
+      const i1 = ci(p.x, p.y); if (i1 < 0) return false;
+      WD[i1] = Math.min(4, WD[i1] + ds * 0.05 / kM);
+      p.e -= ds * 0.0045 / kM; p.age += dt;
+      if (p.e <= 0) return false;
+      const mx = p.x - p.lx, my = p.y - p.ly;
+      if (mx * mx + my * my > 4) {
+        const jeune = p.gen === 0 ? 1.45 : p.gen < 3 ? 1.15 : 0.95;
+        segs.push(p.lx, p.ly, p.x, p.y, 0, 0, 0, 0.2, jeune * fin);
+        p.lx = p.x; p.ly = p.y;
+      }
+      p.dn += ds;
+      if (p.dn > 7) { p.nd = noeud(p.x, p.y, p.nd, 0, 0); p.dn = 0; }
+      p.bc += ds / (16 * kM);
+      if (p.bc >= 1 && !p.cible) {
+        p.bc = 0;
+        if (p.e > 0.5) {
+          p.nd = noeud(p.x, p.y, p.nd, 0, 0); p.dn = 0;
+          const side = Math.random() < 0.5 ? -1 : 1;
+          pointe(0, p.x, p.y, p.a + side * rnd(1.1, 0.5), p.gen + 1, p.nd, p.e * 0.6, 0);
+          p.e *= 0.75; p.a -= side * 0.12;
+        }
+      }
+      return true;
+    }
+
+    function pousserVert(p, dt, t) {
+      const i0 = ci(p.x, p.y); if (i0 < 0) return false;
+      const sd0 = Lt.sd(p.x, p.y);
+      const marge = 16 * kL;
+      if (sd0 < marge && Math.random() < dt * 6) return false;
+      const look = 13, aL = p.a - 0.55, aR = p.a + 0.55;
+      const xl = p.x + Math.cos(aL) * look, yl = p.y + Math.sin(aL) * look, xr = p.x + Math.cos(aR) * look, yr = p.y + Math.sin(aR) * look;
+      const il = ci(xl, yl), ir = ci(xr, yr), ic = ci(p.x + Math.cos(p.a) * look, p.y + Math.sin(p.a) * look);
+      let wd = ((ir < 0 ? -1 : NU[ir]) - (il < 0 ? -1 : NU[il])) * 1.6;
+      wd += ((il < 0 ? 2 : G[il]) - (ir < 0 ? 2 : G[ir])) * 1.4;
+      if (sd0 < marge * 3.5) { const sl = Lt.sd(xl, yl), sr = Lt.sd(xr, yr); wd += clamp((sr - sl) * 0.25, -4, 4) * lisse(marge * 3.5, marge, sd0); }
+      if (ic >= 0 && G[ic] > 0.95 && p.gen > 0 && Math.random() < dt * 3) {
+        const n = NG[ic]; // anastomose : la pointe fusionne avec le réseau voisin
+        if (n >= 0 && NK[n] === 1) { const c = couleurs[p.col]; segs.push(p.x, p.y, NX[n], NY[n], c[0] * 0.7, c[1] * 0.7, c[2] * 0.7, 0, 1); }
+        return false;
+      }
+      p.nz += -p.nz * 1.2 * dt + gauss() * Math.sqrt(dt);
+      wd += p.nz * 0.55;
+      p.w += (clamp(wd, -4, 4) - p.w) * Math.min(1, dt * 6);
+      p.a += p.w * dt;
+      const nl = NU[i0];
+      const ds = VV * kS * dt * (0.45 + 0.55 * Math.min(1.3, nl) / 1.3) * vigueur;
+      p.x += Math.cos(p.a) * ds; p.y += Math.sin(p.a) * ds;
+      if (p.x < 1 || p.y < 1 || p.x > W - 1 || p.y > H - 1) return false;
+      const mange = nl * 0.22 * dt;
+      NU[i0] = nl - mange * 0.5;
+      p.e = Math.min(3, p.e + mange - ds * 0.014);
+      if (p.e <= 0) return false;
+      const i1 = ci(p.x, p.y);
+      if (i1 >= 0) { const g0 = G[i1]; G[i1] = Math.min(3, g0 + ds * 0.085); if (g0 < 0.3 && G[i1] >= 0.3) couvert++; }
+      const mx = p.x - p.lx, my = p.y - p.ly;
+      if (mx * mx + my * my > 6.25) {
+        const c = couleurs[p.col], f = p.gen === 0 ? 0.95 : p.gen < 3 ? 0.8 : 0.68, l = p.gen === 0 ? 1.7 : p.gen < 3 ? 1.25 : 1;
+        segs.push(p.lx, p.ly, p.x, p.y, c[0] * f, c[1] * f, c[2] * f, 0, l);
+        p.lx = p.x; p.ly = p.y;
+      }
+      p.dn += ds;
+      if (p.dn > 8) { p.nd = noeud(p.x, p.y, p.nd, 1, p.col); p.dn = 0; }
+      p.bc += (ds / 30) * (0.4 + 0.6 * Math.min(1.3, nl)) * (p.gen > 5 ? 0.6 : 1);
+      if (p.bc >= 1) {
+        p.bc = 0;
+        if (p.e > 0.6) {
+          p.nd = noeud(p.x, p.y, p.nd, 1, p.col); p.dn = 0;
+          const side = Math.random() < 0.5 ? -1 : 1;
+          pointe(1, p.x, p.y, p.a + side * rnd(1.05, 0.55), p.gen + 1, p.nd, p.e * 0.5, p.col);
+          p.e *= 0.6; p.a -= side * 0.12;
+        }
+      }
+      return true;
+    }
+
+    let relance = 0, couvert = 0, vigueur = 1;
+    const libre = NC - Math.round(Lt.aire / (CS * CS)) * 2.2;
+    function pas(dt, t) {
+      const cov = couvert / libre;
+      vigueur = vigueurVert(t) * clamp((COUV - cov) / 0.22, 0.03, 1);
+      for (let i = semis.length - 1; i >= 0; i--) if (semis[i].t <= t) { germer(semis[i]); semis[i] = semis[semis.length - 1]; semis.pop(); }
+      // nouvelles colonies vertes : fréquentes au début, puis rares, sans jamais s'arrêter tout à fait
+      if (t >= prochainVert) {
+        const l = lieuVide(60 * kL);
+        if (l && cov < COUV - 0.06) { semis.push({ t, k: 1, x: l[0], y: l[1] }); compteVert++; }
+        prochainVert = t + (compteVert < 3 ? rnd(3, 1.5) : t < 300 ? rnd(34, 16) : t < 900 ? rnd(80, 40) : rnd(180, 100));
+      }
+      // le mot se renforce : de nouvelles hyphes blanches repartent des zones encore claires
+      relance += dt * relanceBlanc(t) * (BMAX / 120);
+      while (relance >= 1) {
+        relance -= 1;
+        if (nb >= BMAX) break;
+        if (Math.random() < 0.4 || !blancs.length) {
+          // une spore blanche germe là où le mot est encore clair
+          for (let e = 0; e < 12; e++) {
+            const x = rnd(Lt.box[2], Lt.box[0]), y = rnd(Lt.box[3], Lt.box[1]), c = ci(x, y);
+            if (c >= 0 && WD[c] < 0.5 && Lt.sd(x, y) < -3 * kL && (t > 7.5 || !Lt.estAccent(x, y))) { const r = noeud(x, y, -1, 0, 0); pointe(0, x, y, rnd(TAU), 1, r, 1.6, 0); pointe(0, x, y, rnd(TAU), 1, r, 1.6, 0); break; }
+          }
+        } else {
+          const n = blancs[rint(blancs.length)], c = ci(NX[n], NY[n]);
+          if (c >= 0 && WD[c] < 1.3) pointe(0, NX[n], NY[n], rnd(TAU), 2, n, 1.3, 0);
+        }
+      }
+      for (let i = pointes.length - 1; i >= 0; i--) {
+        const p = pointes[i];
+        const vivant = p.k === 0 ? pousserBlanc(p, dt, t) : pousserVert(p, dt, t);
+        if (!vivant) { if (p.k === 0) nb--; else nv--; pointes[i] = pointes[pointes.length - 1]; pointes.pop(); }
+      }
+      // impulsions lumineuses : de la pointe vers la spore, le long des hyphes
+      const v = 95 * kS;
+      for (let i = impulsions.length - 1; i >= 0; i--) {
+        const q = impulsions[i];
+        let vivant = true;
+        q.b *= Math.exp(-dt * 0.25);
+        const len = Math.max(1, Math.hypot(NX[q.tgt] - NX[q.n], NY[q.tgt] - NY[q.n]));
+        q.f += (v * dt) / len;
+        while (q.f >= 1 && vivant) { q.f -= 1; q.n = q.tgt; q.tgt = NP[q.n]; if (q.tgt < 0) vivant = false; }
+        if (!vivant || q.b < 0.05) { impulsions[i] = impulsions[impulsions.length - 1]; impulsions.pop(); }
+      }
+      const taux = (basse ? 0.8 : 1.8) * (t < 900 ? 1 : 0.6);
+      if (pointes.length && Math.random() < dt * taux) { const p = pointes[rint(pointes.length)]; impulsion(p.nd, p.k === 0 ? 0.7 : 0.9); }
+      else if (!pointes.length && nN > 2 && Math.random() < dt * taux * 0.6) impulsion(rint(nN), 0.8);
+    }
+
+    return { pas, segs, pointes, impulsions, jonctions, NX, NY, couleurs, fin, get vigueur() { return vigueur; }, get couverture() { return couvert / libre; }, get nN() { return nN; } };
+  }
+
+  /* ───────── rendu ───────── */
+  let basse = false, cadreN = 0;
+
+  function viderSegments() {
+    const s = S.segs; if (!s.length) return;
+    gl.bindFramebuffer(gl.FRAMEBUFFER, acc.f); gl.viewport(0, 0, acc.w, acc.h);
+    gl.useProgram(P.seg.p); gl.uniform2f(P.seg.u.u_res, W, H);
+    gl.enable(gl.BLEND); gl.blendFunc(gl.ONE, gl.ONE);
+    gl.bindVertexArray(segVAO); gl.bindBuffer(gl.ARRAY_BUFFER, segVBO);
+    const aa = 0.75 / dpr; // demi-pixel d'antialiasing
+    let k = 0, n = 0;
+    const tirer = () => { gl.bufferSubData(gl.ARRAY_BUFFER, 0, segData, 0, k); gl.drawArrays(gl.TRIANGLES, 0, n * 6); k = 0; n = 0; };
+    for (let i = 0; i < s.length; i += 9) {
+      const x0 = s[i], y0 = s[i + 1], x1 = s[i + 2], y1 = s[i + 3];
+      let dx = x1 - x0, dy = y1 - y0; const l = Math.hypot(dx, dy) || 1;
+      const hw = s[i + 8] * 0.5 + aa, nx = (-dy / l) * hw, ny = (dx / l) * hw;
+      const ex = 0, ey = 0;
+      const r = s[i + 4], g = s[i + 5], b = s[i + 6], a = s[i + 7];
+      const P0x = x0 - ex, P0y = y0 - ey, P1x = x1 + ex, P1y = y1 + ey;
+      const V = [P0x + nx, P0y + ny, 1, P0x - nx, P0y - ny, -1, P1x + nx, P1y + ny, 1, P1x + nx, P1y + ny, 1, P0x - nx, P0y - ny, -1, P1x - nx, P1y - ny, -1];
+      for (let j = 0; j < 18; j += 3) { segData[k++] = V[j]; segData[k++] = V[j + 1]; segData[k++] = V[j + 2]; segData[k++] = r; segData[k++] = g; segData[k++] = b; segData[k++] = a; }
+      if (++n >= SEG_MAX) tirer();
+    }
+    if (n) tirer();
+    s.length = 0;
+  }
+
+  function passe(pr, dst, w, h) { gl.bindFramebuffer(gl.FRAMEBUFFER, dst); gl.viewport(0, 0, w, h); gl.useProgram(pr.p); gl.bindVertexArray(vaoVide); gl.drawArrays(gl.TRIANGLES, 0, 3); }
+  function tex(unite, t, loc) { gl.activeTexture(gl.TEXTURE0 + unite); gl.bindTexture(gl.TEXTURE_2D, t); gl.uniform1i(loc, unite); }
+
+  function halo() {
+    gl.disable(gl.BLEND);
+    gl.useProgram(P.bas.p); tex(0, acc.t, P.bas.u.u_t); tex(1, masqueTex, P.bas.u.u_m);
+    passe(P.bas, b1a.f, b1a.w, b1a.h);
+    gl.useProgram(P.flou.p);
+    tex(0, b1a.t, P.flou.u.u_t); gl.uniform2f(P.flou.u.u_d, 1 / b1a.w, 0); passe(P.flou, b1b.f, b1b.w, b1b.h);
+    tex(0, b1b.t, P.flou.u.u_t); gl.uniform2f(P.flou.u.u_d, 0, 1 / b1a.h); passe(P.flou, b1a.f, b1a.w, b1a.h);
+    tex(0, b1a.t, P.flou.u.u_t); gl.uniform2f(P.flou.u.u_d, 1 / b2a.w, 0); passe(P.flou, b2b.f, b2b.w, b2b.h);
+    tex(0, b2b.t, P.flou.u.u_t); gl.uniform2f(P.flou.u.u_d, 0, 1 / b2a.h); passe(P.flou, b2a.f, b2a.w, b2a.h);
+    tex(0, b2a.t, P.flou.u.u_t); gl.uniform2f(P.flou.u.u_d, 1.6 / b2a.w, 0); passe(P.flou, b2b.f, b2b.w, b2b.h);
+    tex(0, b2b.t, P.flou.u.u_t); gl.uniform2f(P.flou.u.u_d, 0, 1.6 / b2a.h); passe(P.flou, b2a.f, b2a.w, b2a.h);
+  }
+
+  function composer(anime) {
+    gl.disable(gl.BLEND);
+    gl.useProgram(P.fin.p);
+    tex(0, acc.t, P.fin.u.u_t); tex(1, b1a.t, P.fin.u.u_b1); tex(2, b2a.t, P.fin.u.u_b2); tex(3, masqueTex, P.fin.u.u_m);
+    gl.uniform1f(P.fin.u.u_tps, anime ? (T % 800) : 0);
+    gl.uniform1f(P.fin.u.u_eclat, 1.15 + 0.35 * lisse(8, 120, T));
+    gl.uniform2f(P.fin.u.u_px, 1 / RW, 1 / RH);
+    passe(P.fin, null, RW, RH);
+    if (!anime) return;
+    // pointes vivantes et impulsions, en lumière additive
+    let k = 0, n = 0;
+    const lim = basse ? 1800 : PT_MAX;
+    for (const p of S.pointes) {
+      if (n >= lim) break;
+      const c = p.k === 0 ? [1, 1, 1] : ACIDE;
+      ptData[k++] = p.x; ptData[k++] = p.y; ptData[k++] = p.k === 0 ? 4.5 * S.fin : 3.6;
+      ptData[k++] = c[0]; ptData[k++] = c[1]; ptData[k++] = c[2]; ptData[k++] = p.k === 0 ? 0.5 : 0.42 * Math.min(1, 0.4 + 0.6 * S.vigueur);
+      n++;
+    }
+    for (const j of S.jonctions) {
+      const a = Math.min(1, (T - j.t) / 1.5) * Math.min(1, 0.4 + j.n * 0.15) * (0.85 + 0.15 * Math.sin(T * 0.785));
+      ptData[k++] = j.x; ptData[k++] = j.y; ptData[k++] = 10 * S.fin;
+      ptData[k++] = 1; ptData[k++] = 1; ptData[k++] = 1; ptData[k++] = 0.38 * a;
+      n++;
+    }
+    for (const q of S.impulsions) {
+      if (n >= PT_MAX) break;
+      const x = S.NX[q.n] + (S.NX[q.tgt] - S.NX[q.n]) * q.f, y = S.NY[q.n] + (S.NY[q.tgt] - S.NY[q.n]) * q.f;
+      const c = q.k === 0 ? IVOIRE : S.couleurs[q.col] || ACIDE;
+      ptData[k++] = x; ptData[k++] = y; ptData[k++] = 5 + 4 * q.b;
+      ptData[k++] = Math.min(1, c[0] * 1.6 + 0.12); ptData[k++] = Math.min(1, c[1] * 1.4 + 0.12); ptData[k++] = Math.min(1, c[2] * 1.6 + 0.1); ptData[k++] = q.b * 0.55;
+      n++;
+    }
+    if (!n) return;
+    gl.enable(gl.BLEND); gl.blendFunc(gl.ONE, gl.ONE);
+    gl.useProgram(P.pt.p); gl.uniform2f(P.pt.u.u_res, W, H); gl.uniform1f(P.pt.u.u_dpr, dpr);
+    gl.bindVertexArray(ptVAO); gl.bindBuffer(gl.ARRAY_BUFFER, ptVBO);
+    gl.bufferSubData(gl.ARRAY_BUFFER, 0, ptData, 0, k);
+    gl.drawArrays(gl.POINTS, 0, n);
+    gl.disable(gl.BLEND);
+  }
+
+  /* avance rapide (mouvement réduit, changement d'orientation) */
+  function avancer(jusqua) {
+    while (T < jusqua) { const h = jusqua - T > 40 && T > 20 ? 1 / 15 : 1 / 30; T += h; S.pas(h, T); if (S.segs.length > 9 * 20000) viderSegments(); }
+    viderSegments();
+  }
+
+  /* ───────── boucle : sobre, et rien quand l'onglet est caché ───────── */
+  let raf = 0, dernier = 0, moyen = 16, mesures = 0;
+  function image(now) {
+    raf = requestAnimationFrame(image);
+    const cible = T > 1200 ? 1 / 15 : T > 720 ? 1 / 24 : 1 / 30;
+    if (!dernier) { dernier = now - 1000 / 30; }
+    const brut = (now - dernier) / 1000;
+    if (cible && brut < cible * 0.92) return;
+    dernier = now;
+    const dt = Math.min(brut, 0.25);
+    if (T > 3 && T < 15) { moyen += (brut * 1000 - moyen) * 0.05; if (++mesures > 90 && moyen > 45) basse = true; }
+    // pas fixes : le temps du monde suit l'horloge, même sur un appareil lent
+    const n = Math.max(1, Math.ceil(dt / (1 / 30)));
+    for (let i = 0; i < n; i++) { T += dt / n; S.pas(dt / n, T); }
+    viderSegments();
+    cadreN++;
+    if (cadreN % (basse || T > 720 ? 4 : 2) === 0 || cadreN < 3) halo();
+    composer(true);
+  }
+  function lancer() {
+    cancelAnimationFrame(raf); raf = 0;
+    if (ralenti.matches) { if (T < 300) avancer(300); halo(); composer(false); return; } // état mûr, fixe
+    if (document.hidden) return;
+    dernier = 0; raf = requestAnimationFrame(image);
+  }
+  document.addEventListener('visibilitychange', () => { if (document.hidden) { cancelAnimationFrame(raf); raf = 0; } else lancer(); });
+  ralenti.addEventListener && ralenti.addEventListener('change', lancer);
+  let attente = 0, taille = innerWidth + 'x' + innerHeight;
+  addEventListener('resize', () => {
+    clearTimeout(attente);
+    attente = setTimeout(() => {
+      if (innerWidth + 'x' + innerHeight === taille) return;
+      taille = innerWidth + 'x' + innerHeight;
+      const t0 = T; construire(); avancer(Math.min(t0, 25)); halo(); lancer();
+    }, 300);
+  });
+  toile.addEventListener('webglcontextlost', (e) => { e.preventDefault(); cancelAnimationFrame(raf); raf = 0; });
+  toile.addEventListener('webglcontextrestored', () => location.reload());
+
+  let parti = false;
+  const demarrer = () => {
+    if (parti) return; parti = true;
+    construire();
+    document.documentElement.classList.add('gl');
+    // crochets de test (inactifs en usage normal)
+    if (window.__mycelium === null) window.__mycelium = { get T() { return T; }, get basse() { return basse; }, get pointes() { return S.pointes.length; }, get couverture() { return S.couverture; } };
+    if (window.__myceliumAvance > 0) { avancer(window.__myceliumAvance); halo(); }
+    lancer();
+  };
+  try { const ff = new FontFace('ArchivoMasque', `url(${FONTE})`, { weight: '800' }); document.fonts.add(ff); ff.load().then(demarrer, demarrer); } catch (e) { demarrer(); }
+  setTimeout(demarrer, 1500);
+})();
+</script>
 </body>
 </html>
