@@ -105,7 +105,8 @@
         'in vec2 v;uniform sampler2D u_t;uniform sampler2D u_b1;uniform sampler2D u_b2;uniform sampler2D u_m;uniform float u_tps;uniform float u_eclat;uniform vec2 u_px;out vec4 o;' +
         'float h(vec2 p){return fract(sin(dot(p,vec2(12.9898,78.233)))*43758.5453);}' +
         'void main(){vec4 a=texture(u_t,v);float m=texture(u_m,vec2(v.x,1.-v.y)).r;' +
-        'vec3 g=(1.-exp(-a.rgb*1.25))*(1.-.88*m);float w=1.-exp(-a.a*u_eclat);' +
+        'vec2 e=min(v,1.-v)/u_px;float fb=smoothstep(0.,26.,min(e.x,e.y));' +
+        'vec3 g=(1.-exp(-a.rgb*1.25))*(1.-.88*m)*fb;float w=1.-exp(-a.a*u_eclat);' +
         'vec3 c=g+w*vec3(1.,.96,.875);' +
         'vec4 b=texture(u_b1,v)*.5+texture(u_b2,v)*.5;' +
         'c+=b.rgb*.32+b.a*vec3(1.,.96,.875)*.38;' +
@@ -371,14 +372,14 @@
     function pousserBlanc(p, dt, t) {
       const i0 = ci(p.x, p.y); if (i0 < 0) return false;
       const sd0 = Lt.sd(p.x, p.y);
-      if (sd0 > 9 * kM || (sd0 > 3 * kM && Math.random() < dt * 4)) return false;
+      if (!p.cible && (sd0 > 9 * kM || (sd0 > 3 * kM && Math.random() < dt * 4))) return false;
       const look = 7 * kM, aL = p.a - 0.6, aR = p.a + 0.6;
       const xl = p.x + Math.cos(aL) * look, yl = p.y + Math.sin(aL) * look, xr = p.x + Math.cos(aR) * look, yr = p.y + Math.sin(aR) * look;
       const xc = p.x + Math.cos(p.a) * look, yc = p.y + Math.sin(p.a) * look;
       const il = ci(xl, yl), ir = ci(xr, yr), ic = ci(xc, yc);
       let wd = ((il < 0 ? 3 : WD[il]) - (ir < 0 ? 3 : WD[ir])) * 1.1;
       const sl = Lt.sd(xl, yl), sr = Lt.sd(xr, yr), sc = Lt.sd(xc, yc);
-      if (sc > -2.5 * kL || sd0 > -2 * kL) wd += clamp((sl - sr) * 0.5, -5, 5) + (sc > 0 ? (sl < sr ? -3 : 3) : 0);
+      if (!p.cible && (sc > -2.5 * kL || sd0 > -2 * kL)) wd += clamp((sl - sr) * 0.5, -5, 5) + (sc > 0 ? (sl < sr ? -3 : 3) : 0);
       if (p.cible) {
         const dx = p.cible[0] - p.x, dy = p.cible[1] - p.y;
         if (dx * dx + dy * dy < (2.5 * kL + 1.5) ** 2) {
@@ -387,15 +388,15 @@
           return false;
         }
         let da = Math.atan2(dy, dx) - p.a; da = Math.atan2(Math.sin(da), Math.cos(da));
-        wd += clamp(da * 6, -6, 6);
+        wd += clamp(da * 14, -9, 9);
       } else if (ic >= 0 && WD[ic] > 1.7 && p.gen > 0 && Math.random() < dt * 2.5) {
         const n = NG[ic];
         if (n >= 0 && NK[n] === 0) segs.push(p.x, p.y, NX[n], NY[n], 0, 0, 0, 0.2, 1.1 * fin);
         return false;
       }
       p.nz += -p.nz * 1.6 * dt + gauss() * 1.5 * Math.sqrt(dt);
-      wd += p.nz * (p.cible ? 0.3 : 0.8);
-      p.w += (clamp(wd, -6, 6) - p.w) * Math.min(1, dt * 8);
+      wd += p.nz * (p.cible ? 0.15 : 0.8);
+      p.w += (clamp(wd, -9, 9) - p.w) * Math.min(1, dt * 8);
       p.a += p.w * dt;
       const ds = 34 * kM * dt * vitesseBlanc(t);
       p.x += Math.cos(p.a) * ds; p.y += Math.sin(p.a) * ds;
@@ -447,7 +448,8 @@
       const nl = NU[i0];
       const ds = VV * kS * dt * (0.45 + 0.55 * Math.min(1.3, nl) / 1.3) * vigueur;
       p.x += Math.cos(p.a) * ds; p.y += Math.sin(p.a) * ds;
-      if (p.x < 1 || p.y < 1 || p.x > W - 1 || p.y > H - 1) return false;
+      const bord = Math.min(p.x, p.y, W - p.x, H - p.y);
+      if (bord < 1 || (bord < 14 && Math.random() < dt * (14 - bord) * 0.6)) return false;
       const mange = nl * 0.22 * dt;
       NU[i0] = nl - mange * 0.5;
       p.e = Math.min(3, p.e + mange - ds * 0.014);
@@ -475,7 +477,7 @@
       return true;
     }
 
-    let relance = 0, couvert = 0, vigueur = 1;
+    let relance = 0, couvert = 0, vigueur = 1, brinsAccent = 0;
     const libre = NC - Math.round(Lt.aire / (CS * CS)) * 2.2;
     function pas(dt, t) {
       const cov = couvert / libre;
@@ -496,11 +498,12 @@
           // une spore blanche germe là où le mot est encore clair
           for (let e = 0; e < 12; e++) {
             const x = rnd(Lt.box[2], Lt.box[0]), y = rnd(Lt.box[3], Lt.box[1]), c = ci(x, y);
-            if (c >= 0 && WD[c] < 0.5 && Lt.sd(x, y) < -3 * kL && (t > 7.5 || !Lt.estAccent(x, y))) { const r = noeud(x, y, -1, 0, 0); pointe(0, x, y, rnd(TAU), 1, r, 1.6, 0); pointe(0, x, y, rnd(TAU), 1, r, 1.6, 0); break; }
+            if (Lt.estAccent(x, y)) { if (t > 7.5 && brinsAccent < 40) { brinsAccent++; germer({ k: 2 }); } break; }
+            if (c >= 0 && WD[c] < 0.5 && Lt.sd(x, y) < -3 * kL) { const r = noeud(x, y, -1, 0, 0); pointe(0, x, y, rnd(TAU), 1, r, 1.6, 0); pointe(0, x, y, rnd(TAU), 1, r, 1.6, 0); break; }
           }
         } else {
           const n = blancs[rint(blancs.length)], c = ci(NX[n], NY[n]);
-          if (c >= 0 && WD[c] < 1.3) pointe(0, NX[n], NY[n], rnd(TAU), 2, n, 1.3, 0);
+          if (c >= 0 && WD[c] < 1.3 && !Lt.estAccent(NX[n], NY[n])) pointe(0, NX[n], NY[n], rnd(TAU), 2, n, 1.3, 0);
         }
       }
       for (let i = pointes.length - 1; i >= 0; i--) {
