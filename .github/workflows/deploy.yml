@@ -1,0 +1,61 @@
+# Déploie le dossier public/ vers public_html chez EX2, à chaque push sur main.
+# Les valeurs de connexion sont dans les secrets du dépôt : rien de sensible ici.
+name: Déploiement EX2
+
+on:
+  push:
+    branches: [main]
+    paths: ["public/**", ".github/workflows/deploy.yml"]
+  workflow_dispatch:
+
+concurrency:
+  group: deploiement-ex2
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  deployer:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      HOTE: ${{ secrets.EX2_HOST }}
+      UTILISATEUR: ${{ secrets.EX2_USER }}
+      PORT: ${{ secrets.EX2_PORT }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Préparer la clé SSH
+        run: |
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "${{ secrets.EX2_SSH_KEY }}" > ~/.ssh/id_deploiement
+          chmod 600 ~/.ssh/id_deploiement
+          ssh-keyscan -p "$PORT" "$HOTE" > ~/.ssh/known_hosts 2>/dev/null
+          echo "Empreintes du serveur (à comparer à celles de cPanel) :"
+          ssh-keygen -lf ~/.ssh/known_hosts
+          printf 'Host ex2\n  HostName %s\n  User %s\n  Port %s\n  IdentityFile ~/.ssh/id_deploiement\n  IdentitiesOnly yes\n' \
+            "$HOTE" "$UTILISATEUR" "$PORT" > ~/.ssh/config
+
+      - name: Tester la connexion
+        run: |
+          ssh ex2 'echo "Connecté : $(whoami) sur $(hostname)"; command -v rsync || echo "rsync absent"'
+
+      - name: Envoyer les fichiers
+        run: |
+          if ssh ex2 'command -v rsync' >/dev/null 2>&1; then
+            # .well-known (validations AutoSSL) et cgi-bin ne sont jamais effacés.
+            rsync -rlvz --delete --exclude '.well-known/' --exclude 'cgi-bin/' \
+              public/ ex2:public_html/
+          else
+            echo "rsync indisponible : envoi par tar (sans suppression des anciens fichiers)."
+            tar -C public -czf - . | ssh ex2 'tar -xzf - -C public_html'
+          fi
+
+      - name: Vérifier le site
+        run: |
+          curl -fsS -o /dev/null -w 'https://legeekdesbois.fr → HTTP %{http_code}\n' https://legeekdesbois.fr/
+
+      - name: Nettoyer
+        if: always()
+        run: rm -f ~/.ssh/id_deploiement
