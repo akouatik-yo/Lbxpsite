@@ -72,18 +72,27 @@ jobs:
 
       - name: Tester la connexion
         run: |
-          ssh ex2 'echo "Connecté : $(whoami) sur $(hostname)"; command -v rsync || echo "rsync absent"'
+          ssh ex2 'echo "Connecté : $(whoami) sur $(hostname)"'
 
       - name: Envoyer les fichiers
         run: |
-          if ssh ex2 'command -v rsync' >/dev/null 2>&1; then
-            # .well-known (validations AutoSSL) et cgi-bin ne sont jamais effacés.
-            rsync -rlvz --delete --exclude '.well-known/' --exclude 'cgi-bin/' \
-              public/ ex2:public_html/
-          else
-            echo "rsync indisponible : envoi par tar (sans suppression des anciens fichiers)."
-            tar -C public -czf - . | ssh ex2 'tar -xzf - -C public_html'
+          # Manifeste : la liste exacte de ce que le dépôt publie.
+          (cd public && find . -type f | sed 's|^\./||' | LC_ALL=C sort) > manifeste.txt
+          if grep -qE '(^|/)\.\.(/|$)' manifeste.txt; then echo "::error::Chemin suspect dans public/"; exit 1; fi
+          tar -C public -czf - . | ssh ex2 'tar -xzf - -C public_html'
+          # Ménage prudent : on ne supprime QUE des fichiers que ce robot avait lui-même déposés
+          # (ancien manifeste) et qui ont disparu du dépôt. Les dossiers vides restent.
+          ssh ex2 'cat ~/.deploiement-lbxpsite 2>/dev/null || true' | LC_ALL=C sort > ancien.txt
+          comm -23 ancien.txt manifeste.txt > a_supprimer.txt
+          echo "Fichiers retirés du dépôt, supprimés du serveur : $(wc -l < a_supprimer.txt)"
+          cat a_supprimer.txt
+          if [ -s a_supprimer.txt ]; then
+            ssh ex2 'cd ~/public_html && while IFS= read -r f; do
+                case "$f" in ""|/*|*..*|.well-known/*|cgi-bin/*) continue ;; esac
+                [ -f "$f" ] && rm -f -- "./$f"
+              done' < a_supprimer.txt
           fi
+          ssh ex2 'cat > ~/.deploiement-lbxpsite' < manifeste.txt
 
       - name: Vérifier le site
         run: |
