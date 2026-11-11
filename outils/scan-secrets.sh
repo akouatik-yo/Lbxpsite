@@ -8,7 +8,7 @@ set -u
 noms='\.(p12|pfx|jks|keystore|pem|key|ppk|kdbx|sqlite3?|db|sql|env|b64)$|(^|/)(id_(rsa|ed25519|ecdsa)[^/]*|\.htpasswd|\.env\..*|credentials[^/]*|secrets?\.[a-z]+)$' # scan-secrets: ignorer
 motifs='-----BEGIN [A-Z ]*PRIVATE KEY-----|PuTTY-User-Key-File-[0-9]+: |gh[pousr]_[A-Za-z0-9]{30,}|github_pat_[A-Za-z0-9_]{40,}|sk-(ant-|proj-)[A-Za-z0-9_-]{20,}|AKIA[0-9A-Z]{16}|xox[baprs]-[A-Za-z0-9-]{10,}|AIza[0-9A-Za-z_-]{35}|eyJ[A-Za-z0-9_-]{10,}\.eyJ[A-Za-z0-9_-]{10,}\.' # scan-secrets: ignorer
 # Mots-clés suivis d'une valeur littérale (insensible à la casse) : pass: 'x', storepass="x", token = 'x'…
-motscles='(pass(word|wd|phrase)?|storepass|keypass|secret|token|api[_-]?key)["'"'"' ]*[:=] *["'"'"'][^"'"'"' ]{4,}' # scan-secrets: ignorer
+motscles='(pass(word|wd|phrase)?|storepass|keypass|secret|token|api[_-]?key)["'"'"' ]*[:=] *["'"'"'][^"'"'"' $\\(][^"'"'"' ]{3,}' # scan-secrets: ignorer
 plages=()
 if [ $# -eq 1 ]; then plages=("$1")
 elif [ $# -eq 2 ]; then  # appelé en crochet pre-push (arguments : dépôt distant, adresse) : « <réf locale> <sha local> <réf distante> <sha distant> » par ligne
