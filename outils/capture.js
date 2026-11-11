@@ -3,19 +3,23 @@
    Donne les vues tablette et téléphone d'une page (adresse web ou fichier local), à des instants choisis,
    avec des aperçus légers et des extraits pour une revue « par morceaux » sans relire l'image entière.
    Usage :
-     node outils/capture.js <adresse ou fichier> <dossier de sortie> [--vues tablette,telephone,pc]
+     node outils/capture.js <adresse ou fichier> <dossier de sortie> [--vues tablette,telephone,tablette-portrait,pc]
                            [--temps 2,8] [--extrait x,y,l,h[;x,y,l,h…]]
    Sorties dans <dossier> :
      <vue>-<t>s.png          pleine définition (densité réelle de l'appareil)
      <vue>-<t>s-apercu.png   en pixels CSS (léger, pour une relecture par un modèle)
      <vue>-<t>s-extrait<i>.png  morceaux demandés, en pleine définition
      rapport.json            appareil, taille, densité, code HTTP, titre, erreurs de la console
+   Dépôt partagé (avis de Fausta, 11/11) : branche orpheline « captures » d'un dépôt de la réserve,
+   rangée <projet>/<AAAA-MM-JJ>-<sujet>/ ; on n'y pousse que les aperçus, les extraits et rapport.json
+   (la pleine définition seulement sur demande) ; chaque propriétaire élague son sous-dossier (R22).
    Garde-fous : aucune authentification (on ne capture jamais derrière un code, règle de Maud) ;
    GET seulement ; WebGL rendu par le processeur (SwiftShader) : la fluidité n'est PAS mesurable ici. */
 const { chromium, devices } = require('playwright');
 const path = require('path'), fs = require('fs');
 const VUES = {
   tablette: { ...devices['Galaxy Tab S9 landscape'], nom: 'tablette Android, paysage' },
+  'tablette-portrait': { ...devices['Galaxy Tab S9'], nom: 'tablette Android, portrait (option)' },
   telephone: { ...devices['Pixel 7'], nom: 'téléphone Android, portrait' },
   pc: { viewport: { width: 1440, height: 900 }, deviceScaleFactor: 2, nom: 'ordinateur 1440×900' },
 };
