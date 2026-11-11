@@ -5,7 +5,7 @@ name: Déploiement EX2
 on:
   push:
     branches: [main]
-    paths: ["public/**", ".github/workflows/deploy.yml"]
+    paths: ["public/**", "outils/recette.sh", ".github/workflows/deploy.yml"]
   workflow_dispatch:
 
 concurrency:
@@ -72,31 +72,19 @@ jobs:
 
       - name: Tester la connexion
         run: |
-          ssh ex2 'echo "Connecté : $(whoami) sur $(hostname)"'
+          ssh ex2 '.lbxp/bin/deploiement-site.sh test'
 
       - name: Envoyer les fichiers
         run: |
-          # Manifeste : la liste exacte de ce que le dépôt publie.
+          # Tout se fait sur le serveur par une commande unique et relue (~/.lbxp/bin/deploiement-site.sh,
+          # source dans le dépôt privé lbxpcto) : contrôle de l'archive, dépôt, ménage par manifeste.
+          # La clé « github-deploiement » est destinée à n'avoir que cette commande (restrict,command=, P-S5).
           (cd public && find . -type f | sed 's|^\./||' | LC_ALL=C sort) > manifeste.txt
           if grep -qE '(^|/)\.\.(/|$)' manifeste.txt; then echo "::error::Chemin suspect dans public/"; exit 1; fi
-          tar -C public -czf - . | ssh ex2 'tar -xzf - -C public_html'
-          # Ménage prudent : on ne supprime QUE des fichiers que ce robot avait lui-même déposés
-          # (ancien manifeste) et qui ont disparu du dépôt. Les dossiers vides restent.
-          ssh ex2 'cat ~/.deploiement-lbxpsite 2>/dev/null || true' | LC_ALL=C sort > ancien.txt
-          comm -23 ancien.txt manifeste.txt > a_supprimer.txt
-          echo "Fichiers retirés du dépôt, supprimés du serveur : $(wc -l < a_supprimer.txt)"
-          cat a_supprimer.txt
-          if [ -s a_supprimer.txt ]; then
-            ssh ex2 'cd ~/public_html && while IFS= read -r f; do
-                case "$f" in ""|/*|*..*|.well-known/*|cgi-bin/*) continue ;; esac
-                [ -f "$f" ] && rm -f -- "./$f"
-              done' < a_supprimer.txt
-          fi
-          ssh ex2 'cat > ~/.deploiement-lbxpsite' < manifeste.txt
+          tar -C public -czf - . | ssh ex2 '.lbxp/bin/deploiement-site.sh deployer'
 
-      - name: Vérifier le site
-        run: |
-          curl -fsS -o /dev/null -w 'https://legeekdesbois.fr → HTTP %{http_code}\n' https://legeekdesbois.fr/
+      - name: Recette du site (P-Q10 de l'audit n° 1, GET et HEAD seulement)
+        run: bash outils/recette.sh .
 
       - name: Nettoyer
         if: always()

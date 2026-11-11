@@ -1,0 +1,11 @@
+# Site principal legeekdesbois.fr (dépôt lbxpsite, public/.htaccess). Relu par le CTO.
+RewriteEngine On
+# www → adresse sans www, sauf la validation des certificats (AutoSSL).
+RewriteCond %{HTTP_HOST} ^www\.legeekdesbois\.fr$ [NC]
+RewriteCond %{REQUEST_URI} !^/\.well-known/
+RewriteRule ^ https://legeekdesbois.fr%{REQUEST_URI} [R=301,L]
+<IfModule mod_headers.c>
+  # HSTS sur l'adresse principale seulement (pas includeSubDomains : chaque sous-domaine décide).
+  Header always set Strict-Transport-Security "max-age=31536000"
+  Header always set X-Content-Type-Options "nosniff"
+</IfModule>
