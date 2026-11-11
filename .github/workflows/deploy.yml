@@ -86,6 +86,16 @@ jobs:
       - name: Recette du site (P-Q10 de l'audit n° 1, GET et HEAD seulement)
         run: bash outils/recette.sh .
 
+      - name: Contrôle du bridage de la clé (P-S5)
+        run: |
+          # Une fois la clé bridée (restrict,command=), toute commande libre doit être refusée.
+          # Ce contrôle signale aussi un bridage perdu, par exemple si cPanel réécrit authorized_keys.
+          if ssh ex2 'echo LIBRE' 2>/dev/null | grep -qx LIBRE; then
+            echo "::warning::Clé de déploiement NON bridée : une commande libre est acceptée"
+          else
+            echo "Clé bridée : commande libre refusée"
+          fi
+
       - name: Nettoyer
         if: always()
         run: rm -f ~/.ssh/id_deploiement
