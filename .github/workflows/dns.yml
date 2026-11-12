@@ -1,0 +1,62 @@
+# Modifications de la zone DNS de legeekdesbois.fr par l'API EX2 (P-S2/P-S7 de l'audit n° 1, décision de Yoann du 12/11).
+# Le jeton EX2 (portée DNS, 30 jours) vit dans l'environnement GitHub « dns », qui exige l'APPROBATION DE YOANN
+# à chaque passage (gratuit sur un dépôt public). Aucune session ne détient plus ce jeton.
+# Journaux publics : sans risque, la zone DNS est publique par nature. Le jeton n'est jamais affiché.
+name: DNS (approbation de Yoann)
+
+on:
+  workflow_dispatch:
+    inputs:
+      changement:
+        description: "Fichier de dns/changements/ à appliquer (vide : lecture seule de la zone)"
+        required: false
+
+permissions:
+  contents: read
+
+jobs:
+  dns:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    environment: dns
+    env:
+      API: https://api.ex2.com/api/v1/account/domains/30423/dns
+      CHANGEMENT: ${{ inputs.changement }}
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+
+      - name: Lire la zone actuelle
+        env:
+          JETON: ${{ secrets.EX2_API_TOKEN }}
+        run: |
+          [ -n "$JETON" ] || { echo "::error::Secret EX2_API_TOKEN absent de l'environnement dns"; exit 1; }
+          curl -fsS -H "Authorization: Bearer $JETON" "$API" > zone.json
+          python3 -c '
+          import json; z = json.load(open("zone.json")); print("serial :", z.get("serial"))
+          for r in z.get("records", z.get("data", [])) if isinstance(z, dict) else []:
+              print("  %-28s %-6s %s" % (r.get("name"), r.get("type"), r.get("data")))'
+
+      - name: Appliquer le changement relu
+        if: inputs.changement != ''
+        env:
+          JETON: ${{ secrets.EX2_API_TOKEN }}
+        run: |
+          case "$CHANGEMENT" in */*|*..*|"") echo "::error::Nom de fichier invalide"; exit 1 ;; esac
+          f="dns/changements/$CHANGEMENT"; [ -f "$f" ] || { echo "::error::Fichier absent : $f"; exit 1; }
+          echo "Changement appliqué (commit $GITHUB_SHA) :"; cat "$f"
+          python3 - "$f" <<'PY'
+          import json, sys
+          c = json.load(open(sys.argv[1])); z = json.load(open("zone.json"))
+          assert set(c) <= {"add", "delete", "replace", "commentaire"}, "clés inconnues dans le changement"
+          c.pop("commentaire", None); c["serial"] = z["serial"]
+          json.dump(c, open("corps.json", "w"))
+          PY
+          cle="lbxpsite-$(sha256sum "$f" | cut -c1-16)"
+          code=$(curl -sS -o reponse.json -w '%{http_code}' -X POST "$API" -H "Authorization: Bearer $JETON" \
+                 -H 'Content-Type: application/json' -H "Idempotency-Key: $cle" --data @corps.json)
+          echo "HTTP $code (clé d'idempotence $cle)"; head -c 2000 reponse.json; echo
+          case "$code" in 2??) ;; *) exit 1 ;; esac
+
+      - name: Nettoyer
+        if: always()
+        run: rm -f zone.json corps.json reponse.json
