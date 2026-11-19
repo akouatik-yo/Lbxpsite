@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "deny": [
+      "mcp__Gmail",
+      "mcp__Google_Calendar",
+      "mcp__Google_Drive",
+      "mcp__Google_Docs",
+      "mcp__c0ae8b2e-7491-4653-b5c1-a000675eea9b",
+      "mcp__e46f79e3-aa15-457d-afa1-674b85dbe14c",
+      "mcp__58660ec4-4131-4b6f-97f0-636ea19f45b4"
+    ]
+  }
+}
